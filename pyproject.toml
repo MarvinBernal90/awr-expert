@@ -1,0 +1,32 @@
+[project]
+name = "awr-expert"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "pydantic>=2.13.4",
+    "pytest>=9.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+]
+
+[tool.ruff]
+# Set the maximum line length to 88 (Standard Python Black compatibility)
+line-length = 88
+
+[tool.ruff.lint]
+# Select rules: 
+# E (pycodestyle errors), F (pyflakes), I (isort - orders imports), W (warnings)
+select = ["E", "F", "I", "W"]
+
+# Ignore specific rules if needed (empty for now, we want strict mode)
+ignore = []
+
+[tool.ruff.format]
+# Use double quotes for strings.
+quote-style = "double"
