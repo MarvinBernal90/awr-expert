@@ -1,6 +1,7 @@
 """
 Core parsing logic for AWR Reports.
 """
+
 from pathlib import Path
 
 from src.models.base import AWRReport

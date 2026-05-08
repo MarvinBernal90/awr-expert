@@ -1,6 +1,7 @@
 """
 Pytest configuration and global fixtures.
 """
+
 import os
 from pathlib import Path
 
