@@ -15,8 +15,11 @@ logger = logging.getLogger(__name__)
 
 def _extract_metric_from_table(table: Tag, metric_name: str) -> float | None:
     """Helper to find a metric row and extract its 'Per Second' value."""
-    # Find the row containing the exact metric name
-    row = table.find("td", string=lambda t: t and metric_name in t)
+    key = metric_name.strip().lower()
+    row = table.find(
+        "td",
+        string=lambda t: isinstance(t, str) and key in t.strip().lower(),
+    )
     if not row:
         return None
 
@@ -48,17 +51,17 @@ def extract_load_profile(
     raw = LoadProfileRaw()
     normalized = LoadProfileNormalized()
 
-    # Extract metrics using our helper
-    raw.db_time = _extract_metric_from_table(table, "DB Time(s):")
-    raw.logical_reads = _extract_metric_from_table(table, "Logical reads:")
-    raw.physical_reads = _extract_metric_from_table(table, "Physical reads:")
+    # Extract metrics using our helper (now case-insensitive and robust)
+    raw.db_time = _extract_metric_from_table(table, "db time")
+    raw.logical_reads = _extract_metric_from_table(table, "logical read")
+    raw.physical_reads = _extract_metric_from_table(table, "physical read")
 
     # Map directly to normalized
     normalized.db_time_per_sec = raw.db_time
     normalized.logical_reads_per_sec = raw.logical_reads
     normalized.physical_reads_per_sec = raw.physical_reads
 
-    # Hard parses is an extra metric only in the normalized model for our use case
-    normalized.hard_parses_per_sec = _extract_metric_from_table(table, "Hard parses:")
+    # Hard parses is an extra metric
+    normalized.hard_parses_per_sec = _extract_metric_from_table(table, "hard parses")
 
     return raw, normalized
