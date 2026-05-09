@@ -42,11 +42,10 @@ def find_table_by_header(soup: BeautifulSoup, header_text: str) -> Optional[Tag]
         # Check if the table is a sibling following the text
         # (e.g. <h3>Title</h3> \n <table>)
         current = text_node.parent
-        while current and current.name not in ["body", "html"]:
-            next_element = current.find_next_sibling("table")
+        if current:
+            next_element = current.find_next("table")
             if next_element and isinstance(next_element, Tag):
                 return next_element
-            current = current.parent
 
     logger.warning(f"Could not find table for header: '{header_text}'")
     return None
