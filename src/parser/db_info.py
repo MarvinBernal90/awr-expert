@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 def _extract_float_from_text(text: str) -> Optional[float]:
     """Helper to extract the first float number from a string (e.g. '240.50 (mins)')."""
-    match = re.search(r"([\d\.]+)", text)
+    match = re.search(r"[-+]?\d[\d,]*(?:\.\d+)?", text)
     if match:
         try:
-            return float(match.group(1))
+            return float(match.group(0).replace(",", ""))
         except ValueError:
             return None
     return None
