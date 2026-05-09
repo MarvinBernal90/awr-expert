@@ -22,8 +22,10 @@ def test_parser_opens_file_and_returns_base_model(dummy_html_path: Path) -> None
 
     assert report is not None
     assert isinstance(report, AWRReport)
-    # Check that our dummy warning from the skeleton is inside the metadata
-    assert len(report.metadata.parser_warnings) == 1
+    # Verify that db_info was attached to the report (even if empty due to dummy html)
+    assert report.db_info is not None
+    # Since our dummy html doesn't have a valid header, version should be None
+    assert report.db_info.version is None
 
 
 def test_parser_raises_error_for_missing_file() -> None:

@@ -5,7 +5,10 @@ Core parsing logic for AWR Reports.
 import logging
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from src.models.base import AWRReport, Metadata
+from src.parser.db_info import extract_db_info
 from src.parser.exceptions import AWRFileNotFoundError, ParserError
 
 # Initialize the logger for this specific module
@@ -41,17 +44,19 @@ class AWRParser:
 
         try:
             with open(path_obj, "r", encoding="utf-8") as f:
-                _content = f.read()
+                content = f.read()
             logger.debug("Successfully read file content.")
+
+            # --- NUEVA LÓGICA DE EXTRACCIÓN HTML ---
+            soup = BeautifulSoup(content, "lxml")
+            db_info_data = extract_db_info(soup)
+            # ---------------------------------------
+
         except Exception as e:
             logger.error(f"Unexpected error reading file {path_obj}: {e}")
-            raise ParserError(f"Failed to read AWR file: {e}") from e
+            raise ParserError(f"Failed to process AWR file: {e}") from e
 
-        logger.info("Parsing completed successfully (skeleton).")
+        logger.info("Parsing completed successfully.")
 
-        # Return the root model. We add a dummy warning to test the metadata list.
-        return AWRReport(
-            metadata=Metadata(
-                parser_warnings=["Mock warning: Parser extraction logic pending."]
-            )
-        )
+        # Return the root model injected with the real db_info
+        return AWRReport(metadata=Metadata(), db_info=db_info_data)
