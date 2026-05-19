@@ -11,6 +11,7 @@ from src.models.base import AWRReport, Metadata
 from src.parser.db_info import extract_db_info
 from src.parser.exceptions import AWRFileNotFoundError, ParserError
 from src.parser.load_profile import extract_load_profile
+from src.parser.top_events import extract_top_events
 
 # Initialize the logger for this specific module
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class AWRParser:
 
             db_info_data = extract_db_info(soup)
             raw_lp, norm_lp = extract_load_profile(soup)
+            top_events_data = extract_top_events(soup)
             # -----------------------------
 
         except Exception as e:
@@ -57,4 +59,5 @@ class AWRParser:
             db_info=db_info_data,
             load_profile_raw=raw_lp,
             load_profile_normalized=norm_lp,
+            top_events=top_events_data,
         )
