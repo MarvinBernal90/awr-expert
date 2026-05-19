@@ -28,9 +28,9 @@ class DBInfoRaw(BaseModel):
     @field_validator("cpus")
     @classmethod
     def validate_cpus(cls, v: Optional[int]) -> Optional[int]:
-        """Ensures that the CPU count is not a negative number."""
-        if v is not None and v < 0:
-            raise ValueError("CPUs cannot be negative")
+        """Ensures that the CPU count is strictly greater than zero."""
+        if v is not None and v <= 0:
+            raise ValueError("CPUs must be greater than zero")
         return v
 
 
