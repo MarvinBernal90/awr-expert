@@ -2,7 +2,6 @@
 Extraction logic for the 'Top SQL' sections of the AWR Report.
 Edge-case resilient to survive malformed HTML from giant execution plans.
 """
-
 import logging
 from typing import List
 
@@ -72,9 +71,14 @@ def extract_top_sql(soup: BeautifulSoup) -> List[TopSQL]:
                     sql_id = text
                     break
 
+            # Parche de CodeRabbit: Validar estrictamente o saltar
             if not sql_id:
-                # Fallback index if standard structure
-                sql_id = cells[5].text.strip() if len(cells) > 5 else "UNKNOWN"
+                candidate = cells[5].text.strip() if len(cells) > 5 else ""
+                if len(candidate) == 13 and candidate.isalnum():
+                    sql_id = candidate
+                else:
+                    logger.warning("Skipping Top SQL row without a valid SQL ID.")
+                    continue
 
             # SQL Text is usually the last column
             sql_text = cells[-1].text.strip()
@@ -83,7 +87,7 @@ def extract_top_sql(soup: BeautifulSoup) -> List[TopSQL]:
                 sql_id=sql_id,
                 elapsed_time_s=elapsed_time_s,
                 executions=executions,
-                sql_text=sql_text,
+                sql_text=sql_text
             )
             sql_list.append(sql_obj)
 
