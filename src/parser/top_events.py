@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Oracle changes this header between versions
 POSSIBLE_HEADERS = [
+    "Top Timed Events",
     "Top 10 Foreground Events by Total Wait Time",
     "Top 5 Timed Foreground Events",
     "Top 5 Timed Events",
