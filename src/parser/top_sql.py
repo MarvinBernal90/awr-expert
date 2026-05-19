@@ -2,6 +2,7 @@
 Extraction logic for the 'Top SQL' sections of the AWR Report.
 Edge-case resilient to survive malformed HTML from giant execution plans.
 """
+
 import logging
 from typing import List
 
@@ -87,7 +88,7 @@ def extract_top_sql(soup: BeautifulSoup) -> List[TopSQL]:
                 sql_id=sql_id,
                 elapsed_time_s=elapsed_time_s,
                 executions=executions,
-                sql_text=sql_text
+                sql_text=sql_text,
             )
             sql_list.append(sql_obj)
 
