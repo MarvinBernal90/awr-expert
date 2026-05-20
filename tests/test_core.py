@@ -24,7 +24,7 @@ def test_parser_opens_file_and_returns_base_model(dummy_html_path: Path) -> None
     assert isinstance(report, AWRReport)
     # Verify that db_info was attached to the report (even if empty due to dummy html)
     assert report.db_info is not None
-    # Since our dummy html doesn't have a valid header, version should be None
+    # Since our dummy html doesn't have a valid header, version should be "UNKNOWN"
     assert report.db_info.version == "UNKNOWN"
 
 
