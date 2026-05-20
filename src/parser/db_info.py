@@ -18,7 +18,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
     Supports Oracle 10g, 11g, 12c, and 19c formats using pure BeautifulSoup.
     """
     try:
-        # Helper interno para encontrar una tabla basándose en sus encabezados
+        # Internal helper to find a table by its headers
         def find_table(headers: list) -> tuple:
             for table in soup.find_all("table"):
                 ths = [th.get_text(strip=True) for th in table.find_all("th")]
@@ -37,7 +37,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
         if table:
             tds = [td.get_text(strip=True) for td in table.find_all("td")]
             if tds:
-                # Mapeamos los encabezados con los valores
+                # Map headers to values
                 data = dict(zip(ths, tds))
                 db_name = data.get("DB Name", "UNKNOWN")
                 try:
@@ -55,7 +55,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
         if version == "UNKNOWN":
             logger.warning("Version missing in AWR header.")
 
-        # 2. Rescate de CPUs para Oracle 10g (Operating System Statistics)
+        # 2. Fallback for CPUs in Oracle 10g (Operating System Statistics)
         if cpus is None:
             os_table, _ = find_table(["Statistic", "Value"])
             if not os_table:
@@ -71,12 +71,12 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                             pass
                         break
 
-        # Fallback de seguridad para Pydantic
+        # 3. Safety fallback for Pydantic
         if cpus is None or cpus <= 0:
             logger.warning("Could not extract CPUs. Defaulting to 1.")
             cpus = 1
 
-        # 3. Elapsed and DB Time
+        # 4. Elapsed and DB Time
         elapsed_time_min = 0.0
         db_time_min = 0.0
 
@@ -87,7 +87,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                 for i, td_text in enumerate(row_tds):
                     lower_text = td_text.lower()
 
-                    # Buscamos la etiqueta "Elapsed:" y tomamos el siguiente valor numérico
+                    # Look for "Elapsed:" and get the next numeric value
                     if "elapsed" in lower_text and ":" in lower_text:
                         for val_td in row_tds[i + 1 :]:
                             if val_td:
@@ -99,7 +99,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                                     pass
                                 break
 
-                    # Buscamos la etiqueta "DB Time:" y tomamos el siguiente valor numérico
+                    # Look for "DB Time:" and get the next numeric value
                     if "db time" in lower_text and ":" in lower_text:
                         for val_td in row_tds[i + 1 :]:
                             if val_td:
