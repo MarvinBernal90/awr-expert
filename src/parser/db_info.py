@@ -63,9 +63,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
 
             if os_table:
                 for tr in os_table.find_all("tr"):
-                    row_tds = [
-                        td.get_text(strip=True) for td in tr.find_all("td")
-                    ]
+                    row_tds = [td.get_text(strip=True) for td in tr.find_all("td")]
                     if len(row_tds) >= 2 and "NUM_CPUS" in row_tds[0].upper():
                         try:
                             cpus = int(row_tds[1])
@@ -88,7 +86,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                 row_tds = [td.get_text(strip=True) for td in tr.find_all("td")]
                 for i, td_text in enumerate(row_tds):
                     lower_text = td_text.lower()
-                    
+
                     # Buscamos la etiqueta "Elapsed:" y tomamos el siguiente valor numérico
                     if "elapsed" in lower_text and ":" in lower_text:
                         for val_td in row_tds[i + 1 :]:
@@ -100,7 +98,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                                 except ValueError:
                                     pass
                                 break
-                    
+
                     # Buscamos la etiqueta "DB Time:" y tomamos el siguiente valor numérico
                     if "db time" in lower_text and ":" in lower_text:
                         for val_td in row_tds[i + 1 :]:
