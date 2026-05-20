@@ -65,15 +65,11 @@ def parse(
         console.print(
             f"  • Top Events Extracted: [cyan]{len(report.top_events)}[/cyan]"
         )
-        console.print(
-            f"  • Top SQL Extracted: [cyan]{len(report.top_sql)}[/cyan]"
-        )
+        console.print(f"  • Top SQL Extracted: [cyan]{len(report.top_sql)}[/cyan]")
 
         if report.metadata.parser_warnings:
             warn_count = len(report.metadata.parser_warnings)
-            console.print(
-                f"\n[bold yellow]⚠ Warnings ({warn_count}):[/bold yellow]"
-            )
+            console.print(f"\n[bold yellow]⚠ Warnings ({warn_count}):[/bold yellow]")
             for w in report.metadata.parser_warnings:
                 console.print(f"  - {w}")
 
@@ -91,9 +87,7 @@ def parse(
             console.print(f"  • Idempotency Hash: [dim]{awr_hash}[/dim]")
 
     except Exception as e:
-        console.print(
-            f"\n[bold red]✘ Error processing AWR file:[/bold red] {e}"
-        )
+        console.print(f"\n[bold red]✘ Error processing AWR file:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
