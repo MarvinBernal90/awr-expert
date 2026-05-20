@@ -23,14 +23,18 @@ class AWRRepository:
 
     def generate_hash(self, report: AWRReport) -> str:
         """
-        Generates a deterministic SHA-256 hash representing a unique AWR
-        snapshot period. Acts as a surrogate key for DBID + Begin Snap + End Snap.
+        Generates a deterministic SHA-256 hash representing the actual content.
+        Avoids collisions by hashing the exact parsed metrics, bypassing the
+        need for explicit Snap IDs and avoiding the 0-0.0-0.0 fallback.
         """
-        db_id = report.db_info.db_id if report.db_info else 0
-        elapsed = report.db_info.elapsed_time_min if report.db_info else 0.0
-        db_time = report.db_info.db_time_min if report.db_info else 0.0
-
-        raw_str = f"{db_id}-{elapsed}-{db_time}"
+        # Create a deterministic dictionary from core data
+        core_data = {
+            "db_info": report.db_info.model_dump() if report.db_info else None,
+            "top_events": [e.model_dump() for e in report.top_events],
+        }
+        # sort_keys=True ensures the JSON string is always generated
+        # in the exact same order
+        raw_str = json.dumps(core_data, sort_keys=True)
         return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
     def save(self, report: AWRReport) -> str:
@@ -42,6 +46,8 @@ class AWRRepository:
         logger.info(f"Saving AWR Report with Hash: {awr_hash}")
 
         # DuckDB supports Postgres-like ON CONFLICT DO UPDATE
+        # Notice we DO NOT update created_at here to preserve
+        # the original insertion time.
         query = """
         INSERT INTO awr_reports (
             awr_hash, schema_version, db_name, db_id, version, is_rac, cpus,
@@ -54,8 +60,7 @@ class AWRRepository:
             load_profile_normalized = EXCLUDED.load_profile_normalized,
             top_events = EXCLUDED.top_events,
             top_sql = EXCLUDED.top_sql,
-            metadata_warnings = EXCLUDED.metadata_warnings,
-            created_at = now()
+            metadata_warnings = EXCLUDED.metadata_warnings
         """
 
         # Serialize nested Pydantic models to JSON strings for DuckDB
