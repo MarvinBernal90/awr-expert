@@ -1,6 +1,7 @@
 """
 Command Line Interface for AWR Expert.
 """
+
 import logging
 from pathlib import Path
 
@@ -14,9 +15,8 @@ from src.services.repository import AWRRepository
 # Setup basic logging to avoid cluttering the beautiful CLI output
 logging.basicConfig(
     level=logging.ERROR,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-# We can still capture parser logs if needed, but we keep the CLI clean.
 
 app = typer.Typer(
     help="AWR Expert CLI - The intelligent parser for Oracle AWR reports.",
@@ -58,31 +58,42 @@ def parse(
         # Extract some quick summary metrics to show the user
         db_id = report.db_info.db_id if report.db_info else "Unknown"
         elapsed = report.db_info.elapsed_time_min if report.db_info else 0.0
-        
+
         console.print("\n[bold green]✔ Parsing successful![/bold green]")
         console.print(f"  • DB ID: [cyan]{db_id}[/cyan]")
         console.print(f"  • Elapsed Time: [cyan]{elapsed} mins[/cyan]")
-        console.print(f"  • Top Events Extracted: [cyan]{len(report.top_events)}[/cyan]")
-        console.print(f"  • Top SQL Extracted: [cyan]{len(report.top_sql)}[/cyan]")
-        
+        console.print(
+            f"  • Top Events Extracted: [cyan]{len(report.top_events)}[/cyan]"
+        )
+        console.print(
+            f"  • Top SQL Extracted: [cyan]{len(report.top_sql)}[/cyan]"
+        )
+
         if report.metadata.parser_warnings:
-            console.print(f"\n[bold yellow]⚠ Warnings ({len(report.metadata.parser_warnings)}):[/bold yellow]")
+            warn_count = len(report.metadata.parser_warnings)
+            console.print(
+                f"\n[bold yellow]⚠ Warnings ({warn_count}):[/bold yellow]"
+            )
             for w in report.metadata.parser_warnings:
                 console.print(f"  - {w}")
 
         # 2. Save to database if the flag is present
         if save_to_db:
-            console.print("\n[bold magenta]🗄️ Saving to DuckDB warehouse...[/bold magenta]")
+            console.print(
+                "\n[bold magenta]🗄️ Saving to DuckDB warehouse...[/bold magenta]"
+            )
             db_manager = DBManager()
             db_manager.initialize_schema()
             repo = AWRRepository(db_manager)
-            
+
             awr_hash = repo.save(report)
             console.print("[bold green]✔ Report saved safely![/bold green]")
             console.print(f"  • Idempotency Hash: [dim]{awr_hash}[/dim]")
 
     except Exception as e:
-        console.print(f"\n[bold red]✘ Error processing AWR file:[/bold red] {e}")
+        console.print(
+            f"\n[bold red]✘ Error processing AWR file:[/bold red] {e}"
+        )
         raise typer.Exit(code=1)
 
 
