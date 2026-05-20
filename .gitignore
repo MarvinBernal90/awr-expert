@@ -10,3 +10,5 @@ wheels/
 .venv
 awr_warehouse.duckdb
 sample_awr.html
+*.html
+*Zone.Identifier
