@@ -47,5 +47,5 @@ def find_table_by_header(soup: BeautifulSoup, header_text: str) -> Optional[Tag]
             if next_element and isinstance(next_element, Tag):
                 return next_element
 
-    logger.warning(f"Could not find table for header: '{header_text}'")
+    logger.debug(f"Could not find table for header: '{header_text}'")
     return None

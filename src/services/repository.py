@@ -1,95 +1,82 @@
 """
-Repository layer for AWR Reports.
-Handles data persistence, hashing (idempotency), and JSON serialization for DuckDB.
+Repository layer to manage read and write operations on DuckDB.
 """
 
-import hashlib
 import json
 import logging
 
+import duckdb
+
 from src.models.base import AWRReport
-from src.services.db import DBManager
+from src.services.db import DB_FILE
 
 logger = logging.getLogger(__name__)
 
 
 class AWRRepository:
-    """
-    Handles the insertion and updates of AWR Reports into DuckDB.
-    """
+    """Handles persistence layer interactions for AWR reports."""
 
-    def __init__(self, db_manager: DBManager) -> None:
-        self.db = db_manager
+    def __init__(self, db_file: str = DB_FILE):
+        self.db_file = db_file
 
-    def generate_hash(self, report: AWRReport) -> str:
+    def save_report(self, awr_hash: str, report: AWRReport) -> None:
         """
-        Generates a deterministic SHA-256 hash representing the actual content.
-        Avoids collisions by hashing the exact parsed metrics, bypassing the
-        need for explicit Snap IDs and avoiding the 0-0.0-0.0 fallback.
+        Saves or updates an AWRReport into DuckDB using its unique SHA-256 hash.
+        Performs an idempotent UPSERT operation.
         """
-        # Create a deterministic dictionary from core data
-        core_data = {
-            "db_info": report.db_info.model_dump() if report.db_info else None,
-            "top_events": [e.model_dump() for e in report.top_events],
-        }
-        # sort_keys=True ensures the JSON string is always generated
-        # in the exact same order
-        raw_str = json.dumps(core_data, sort_keys=True)
-        return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
-
-    def save(self, report: AWRReport) -> str:
-        """
-        Saves the AWR report to the database.
-        Uses UPSERT logic (ON CONFLICT) to prevent duplicates and ensure idempotency.
-        """
-        awr_hash = self.generate_hash(report)
-        logger.info(f"Saving AWR Report with Hash: {awr_hash}")
-
-        # DuckDB supports Postgres-like ON CONFLICT DO UPDATE
-        # Notice we DO NOT update created_at here to preserve
-        # the original insertion time.
-        query = """
-        INSERT INTO awr_reports (
-            awr_hash, schema_version, db_name, db_id, version, is_rac, cpus,
-            elapsed_time_min, db_time_min, load_profile_raw,
-            load_profile_normalized, top_events, top_sql, metadata_warnings
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (awr_hash) DO UPDATE SET
-            schema_version = EXCLUDED.schema_version,
-            load_profile_raw = EXCLUDED.load_profile_raw,
-            load_profile_normalized = EXCLUDED.load_profile_normalized,
-            top_events = EXCLUDED.top_events,
-            top_sql = EXCLUDED.top_sql,
-            metadata_warnings = EXCLUDED.metadata_warnings
-        """
-
-        # Serialize nested Pydantic models to JSON strings for DuckDB
-        params = (
-            awr_hash,
-            report.metadata.schema_version,
-            report.db_info.db_name if report.db_info else None,
-            report.db_info.db_id if report.db_info else None,
-            report.db_info.version if report.db_info else None,
-            report.db_info.is_rac if report.db_info else False,
-            report.db_info.cpus if report.db_info else None,
-            report.db_info.elapsed_time_min if report.db_info else None,
-            report.db_info.db_time_min if report.db_info else None,
-            json.dumps(report.load_profile_raw.model_dump())
-            if report.load_profile_raw
-            else None,
-            json.dumps(report.load_profile_normalized.model_dump())
-            if report.load_profile_normalized
-            else None,
-            json.dumps([e.model_dump() for e in report.top_events]),
-            json.dumps([s.model_dump() for s in report.top_sql]),
-            json.dumps(report.metadata.parser_warnings),
-        )
-
+        conn = duckdb.connect(self.db_file)
         try:
-            with self.db.get_connection() as conn:
-                conn.execute(query, params)
-            logger.debug("Report saved successfully (UPSERT applied).")
-            return awr_hash
+            # Prepare flat columns from db_info block
+            db_id = report.db_info.db_id if report.db_info else None
+            db_name = report.db_info.db_name if report.db_info else None
+            version = report.db_info.version if report.db_info else None
+            host = report.db_info.host if report.db_info else None
+            is_rac = report.db_info.is_rac if report.db_info else False
+            cpus = report.db_info.cpus if report.db_info else None
+            elapsed = report.db_info.elapsed_time_min if report.db_info else None
+            db_time = report.db_info.db_time_min if report.db_info else None
+
+            # Serialize the entire Pydantic object into a clean JSON payload
+            raw_payload_json = json.dumps(report.model_dump())
+
+            # Idempotent UPSERT strategy using DuckDB native syntax
+            # Notice we removed created_at from the UPDATE SET clause
+            query = """
+                INSERT INTO awr_reports (
+                    awr_hash, db_id, db_name, version, host, is_rac, cpus,
+                    elapsed_time_min, db_time_min, raw_payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (awr_hash) DO UPDATE SET
+                    db_id = EXCLUDED.db_id,
+                    db_name = EXCLUDED.db_name,
+                    version = EXCLUDED.version,
+                    host = EXCLUDED.host,
+                    is_rac = EXCLUDED.is_rac,
+                    cpus = EXCLUDED.cpus,
+                    elapsed_time_min = EXCLUDED.elapsed_time_min,
+                    db_time_min = EXCLUDED.db_time_min,
+                    raw_payload = EXCLUDED.raw_payload
+            """
+
+            conn.execute(
+                query,
+                [
+                    awr_hash,
+                    db_id,
+                    db_name,
+                    version,
+                    host,
+                    is_rac,
+                    cpus,
+                    elapsed,
+                    db_time,
+                    raw_payload_json,
+                ],
+            )
+            logger.info(f"Report with hash {awr_hash} saved effectively.")
+
         except Exception as e:
-            logger.error(f"Failed to save AWR report to DB: {e}")
-            raise
+            logger.error(f"Database error during save operation: {e}")
+            raise e
+        finally:
+            conn.close()

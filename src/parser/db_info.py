@@ -32,6 +32,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
         version = "UNKNOWN"
         is_rac = False
         cpus = None
+        host = "UNKNOWN"
 
         table, ths = find_table(["DB Name", "DB Id"])
         if table:
@@ -46,6 +47,8 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
                     pass
                 version = data.get("Release", "UNKNOWN")
                 is_rac = data.get("RAC", "").upper() == "YES"
+                host = data.get("Host Name", data.get("Host", "UNKNOWN"))
+
                 if "CPUs" in data:
                     try:
                         cpus = int(data["CPUs"])
@@ -119,6 +122,7 @@ def extract_db_info(soup: BeautifulSoup) -> Optional[DBInfoRaw]:
             cpus=cpus,
             elapsed_time_min=elapsed_time_min,
             db_time_min=db_time_min,
+            host=host,
         )
 
     except Exception as e:

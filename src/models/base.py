@@ -20,6 +20,7 @@ class DBInfoRaw(BaseModel):
     db_name: Optional[str] = None
     db_id: Optional[int] = None
     version: Optional[str] = None
+    host: str = "UNKNOWN"
     is_rac: bool = False
     cpus: Optional[int] = None
     elapsed_time_min: Optional[float] = None
