@@ -56,8 +56,11 @@ def test_save_report(test_db):
 
     # Verify the report was inserted correctly and only once
     conn = duckdb.connect(test_db)
+
+    # Deterministic fetch scoped by the specific hash
     result = conn.execute(
-        "SELECT awr_hash, db_name, host, cpus FROM awr_reports"
+        "SELECT awr_hash, db_name, host, cpus FROM awr_reports WHERE awr_hash = ?",
+        [test_hash],
     ).fetchone()
 
     count = conn.execute(
