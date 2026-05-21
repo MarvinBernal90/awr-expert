@@ -38,7 +38,11 @@ def analyze_cpu(report: AWRReport) -> Optional[CPUDiagnosis]:
         return None
 
     # 1. Extract Key Metrics
-    cpus = report.os_stat.num_cpus or report.db_info.cpus or 1
+    cpus = report.os_stat.num_cpus or report.db_info.cpus
+    if cpus is None or cpus <= 0:
+        logger.warning("Insufficient CPU metadata to run CPU analysis.")
+        return None
+
     elapsed_mins = report.db_info.elapsed_time_min or 0.0
     db_time_s = report.time_model.db_time_s or 0.0
     db_cpu_s = report.time_model.db_cpu_s or 0.0

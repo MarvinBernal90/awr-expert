@@ -37,7 +37,12 @@ def main(
 
     # 1. Parsing Phase
     parser = AWRParser()
-    report = parser.parse(file)
+
+    try:
+        report = parser.parse(file)
+    except Exception as e:
+        console.print(f"[bold red]Error parsing report: {e}[/bold red]")
+        raise typer.Exit(code=1)
 
     # Extract quick summary metrics to show the user
     db_id = report.db_info.db_id if report.db_info else "Unknown"

@@ -50,15 +50,22 @@ def test_save_report(test_db):
 
     test_hash = "fake_sha256_hash_123"
 
-    # Save the report
+    # Save twice to validate UPSERT/idempotency
+    repo.save_report(test_hash, mock_report)
     repo.save_report(test_hash, mock_report)
 
-    # Verify the report was inserted correctly
+    # Verify the report was inserted correctly and only once
     conn = duckdb.connect(test_db)
     result = conn.execute(
         "SELECT awr_hash, db_name, host, cpus FROM awr_reports"
     ).fetchone()
+
+    count = conn.execute(
+        "SELECT COUNT(*) FROM awr_reports WHERE awr_hash = ?",
+        [test_hash],
+    ).fetchone()[0]
     conn.close()
 
+    assert count == 1
     assert result is not None
     assert result == (test_hash, "TEST_DB", "test_host", 4)

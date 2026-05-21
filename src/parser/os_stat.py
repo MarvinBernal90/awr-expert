@@ -43,7 +43,11 @@ def extract_os_stat(soup: BeautifulSoup) -> Optional[OSStatRaw]:
             idle_time_cs=data.get("IDLE_TIME"),
             user_time_cs=data.get("USER_TIME"),
             sys_time_cs=data.get("SYS_TIME"),
-            iowait_time_cs=data.get("IOWAIT_TIME") or data.get("OS_CPU_WAIT_TIME"),
+            iowait_time_cs=(
+                data["IOWAIT_TIME"]
+                if "IOWAIT_TIME" in data
+                else data.get("OS_CPU_WAIT_TIME")
+            ),
         )
 
     except Exception as e:

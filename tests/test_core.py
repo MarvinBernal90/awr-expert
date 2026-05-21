@@ -27,23 +27,25 @@ def test_parser_returns_awr_report(sample_html_file: Path) -> None:
     parser = AWRParser()
     report = parser.parse(sample_html_file)
 
-    # Verifica que el core devuelve un objeto válido de Pydantic
+    # Verify that the core returns a valid Pydantic object
     assert isinstance(report, AWRReport)
     assert report.metadata is not None
-    # Como el HTML es falso, las listas por defecto deben estar vacías
-    assert isinstance(report.top_events, list)
-    assert isinstance(report.top_sql, list)
+
+    # Since the HTML is fake, the default lists must be strictly empty
+    assert report.top_events == []
+    assert report.top_sql == []
 
 
-def test_parser_raises_error_for_missing_file() -> None:
+def test_parser_raises_error_for_missing_file(tmp_path: Path) -> None:
     """
     GIVEN a non-existent file path
     WHEN the AWRParser.parse() method is called
     THEN it should raise a FileNotFoundError.
     """
     parser = AWRParser()
-    fake_path = Path("this_file_does_not_exist.html")
 
-    # Aquí esperamos la excepción estándar de Python
+    # Use a guaranteed-missing path under tmp_path
+    fake_path = tmp_path / "this_file_does_not_exist.html"
+
     with pytest.raises(FileNotFoundError):
         parser.parse(fake_path)
