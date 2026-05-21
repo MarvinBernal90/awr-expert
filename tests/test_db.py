@@ -1,30 +1,24 @@
-"""
-Unit tests for the DuckDB Manager.
-"""
+import duckdb
 
-from pathlib import Path
-
-from src.services.db import DBManager
+from src.services import db
 
 
-def test_initialize_schema_creates_table(tmp_path: Path) -> None:
-    """
-    GIVEN a DBManager pointing to a temporary path
-    WHEN initialize_schema is called
-    THEN it should create the database file and the 'awr_reports' table.
-    """
-    db_file = tmp_path / "test_warehouse.duckdb"
-    manager = DBManager(db_path=str(db_file))
+def test_initialize_warehouse(tmp_path, monkeypatch):
+    """Tests that the DuckDB warehouse is initialized with the correct schema."""
+    # Mock the DB_FILE to point to a temporary test directory
+    test_db = tmp_path / "test_warehouse.duckdb"
+    monkeypatch.setattr(db, "DB_FILE", str(test_db))
 
-    manager.initialize_schema()
+    # Run the initialization
+    db.initialize_warehouse()
 
-    # Verify the physical file exists
-    assert db_file.exists()
+    # Verify the file was created
+    assert test_db.exists()
 
-    # Verify the table was created
-    with manager.get_connection() as conn:
-        tables = conn.execute("SHOW TABLES").fetchall()
-        # tables is a list of tuples like: [('awr_reports',)]
-        table_names = [table[0] for table in tables]
+    # Verify the table schema exists
+    conn = duckdb.connect(str(test_db))
+    tables = conn.execute("SHOW TABLES").fetchall()
+    conn.close()
 
-        assert "awr_reports" in table_names
+    # DuckDB returns a list of tuples, e.g., [('awr_reports',)]
+    assert ("awr_reports",) in tables

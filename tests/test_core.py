@@ -1,5 +1,5 @@
 """
-Unit tests for the core AWR parser.
+Unit tests for the Core AWR Parser.
 """
 
 from pathlib import Path
@@ -8,34 +8,42 @@ import pytest
 
 from src.models.base import AWRReport
 from src.parser.core import AWRParser
-from src.parser.exceptions import AWRFileNotFoundError
 
 
-def test_parser_opens_file_and_returns_base_model(dummy_html_path: Path) -> None:
+@pytest.fixture
+def sample_html_file(tmp_path: Path) -> Path:
+    """Creates a dummy HTML file for testing."""
+    file_path = tmp_path / "dummy_awr.html"
+    file_path.write_text("<html><body>Dummy AWR Report</body></html>", encoding="utf-8")
+    return file_path
+
+
+def test_parser_returns_awr_report(sample_html_file: Path) -> None:
     """
-    GIVEN a valid file path to an HTML file
+    GIVEN a valid (but dummy) HTML file
     WHEN the AWRParser.parse() method is called
-    THEN it should read the file without exceptions and return an AWRReport instance.
+    THEN it should return an AWRReport object.
     """
     parser = AWRParser()
-    report = parser.parse(dummy_html_path)
+    report = parser.parse(sample_html_file)
 
-    assert report is not None
+    # Verifica que el core devuelve un objeto válido de Pydantic
     assert isinstance(report, AWRReport)
-    # Verify that db_info was attached to the report (even if empty due to dummy html)
-    assert report.db_info is not None
-    # Since our dummy html doesn't have a valid header, version should be "UNKNOWN"
-    assert report.db_info.version == "UNKNOWN"
+    assert report.metadata is not None
+    # Como el HTML es falso, las listas por defecto deben estar vacías
+    assert isinstance(report.top_events, list)
+    assert isinstance(report.top_sql, list)
 
 
 def test_parser_raises_error_for_missing_file() -> None:
     """
     GIVEN a non-existent file path
     WHEN the AWRParser.parse() method is called
-    THEN it should raise an AWRFileNotFoundError.
+    THEN it should raise a FileNotFoundError.
     """
     parser = AWRParser()
     fake_path = Path("this_file_does_not_exist.html")
 
-    with pytest.raises(AWRFileNotFoundError):
+    # Aquí esperamos la excepción estándar de Python
+    with pytest.raises(FileNotFoundError):
         parser.parse(fake_path)
