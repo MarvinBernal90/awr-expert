@@ -1,52 +1,74 @@
-"""
-Unit tests for the AWR Repository.
-"""
+import duckdb
+import pytest
 
-from pathlib import Path
-
-from src.models.base import AWRReport, DBInfoRaw, Metadata, TopEvent
-from src.services.db import DBManager
+from src.models.base import AWRReport, DBInfoRaw, Metadata
 from src.services.repository import AWRRepository
 
 
-def test_repository_upsert_idempotency(tmp_path: Path) -> None:
-    """
-    GIVEN a valid AWRReport and an initialized DuckDB database
-    WHEN the same report is saved twice via the repository
-    THEN it should not raise a duplicate key error, and only 1 row should exist.
-    """
-    # 1. Setup in-memory / temporary DB
+@pytest.fixture
+def test_db(tmp_path):
+    """Fixture to provide a temporary initialized DuckDB."""
     db_file = tmp_path / "test_repo.duckdb"
-    db_manager = DBManager(db_path=str(db_file))
-    db_manager.initialize_schema()
+    conn = duckdb.connect(str(db_file))
+    conn.execute(
+        """
+        CREATE TABLE awr_reports (
+            awr_hash VARCHAR PRIMARY KEY,
+            db_id BIGINT,
+            db_name VARCHAR,
+            version VARCHAR,
+            host VARCHAR,
+            is_rac BOOLEAN,
+            cpus INTEGER,
+            elapsed_time_min DOUBLE,
+            db_time_min DOUBLE,
+            raw_payload JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.close()
+    return str(db_file)
 
-    repo = AWRRepository(db_manager)
 
-    # 2. Create a dummy Pydantic model
-    report = AWRReport(
-        metadata=Metadata(parser_warnings=["Test warning"]),
+def test_save_report(test_db):
+    """Tests the UPSERT operation of the AWRRepository."""
+    repo = AWRRepository(db_file=test_db)
+
+    # Create a mock Pydantic report
+    mock_report = AWRReport(
+        metadata=Metadata(parser_warnings=[]),
         db_info=DBInfoRaw(
-            db_id=123456,
-            db_name="PRODDB",
-            cpus=8,
-            elapsed_time_min=60.1,
-            db_time_min=300.5,
+            db_name="TEST_DB",
+            db_id=999,
+            version="19c",
+            host="test_host",
+            cpus=4,
+            elapsed_time_min=60.0,
         ),
-        top_events=[TopEvent(event_name="log file sync", waits=100)],
     )
 
-    # 3. Save it the first time
-    hash_1 = repo.save(report)
-    assert hash_1 is not None
+    test_hash = "fake_sha256_hash_123"
 
-    # 4. Save it a second time (Simulating parsing the same file again)
-    hash_2 = repo.save(report)
+    # Save twice to validate UPSERT/idempotency
+    repo.save_report(test_hash, mock_report)
+    repo.save_report(test_hash, mock_report)
 
-    # 5. Assertions
-    assert hash_1 == hash_2  # The deterministic hash must be identical
+    # Verify the report was inserted correctly and only once
+    conn = duckdb.connect(test_db)
 
-    with db_manager.get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM awr_reports").fetchone()[0]
+    # Deterministic fetch scoped by the specific hash
+    result = conn.execute(
+        "SELECT awr_hash, db_name, host, cpus FROM awr_reports WHERE awr_hash = ?",
+        [test_hash],
+    ).fetchone()
 
-    # Idempotency guarantees exactly 1 row is stored
+    count = conn.execute(
+        "SELECT COUNT(*) FROM awr_reports WHERE awr_hash = ?",
+        [test_hash],
+    ).fetchone()[0]
+    conn.close()
+
     assert count == 1
+    assert result is not None
+    assert result == (test_hash, "TEST_DB", "test_host", 4)

@@ -1,5 +1,6 @@
 """
-Core parsing logic for AWR Reports.
+Core AWR Parser module.
+Orchestrates the extraction of different sections of the AWR HTML report.
 """
 
 import logging
@@ -9,58 +10,53 @@ from bs4 import BeautifulSoup
 
 from src.models.base import AWRReport, Metadata
 from src.parser.db_info import extract_db_info
-from src.parser.exceptions import AWRFileNotFoundError, ParserError
 from src.parser.load_profile import extract_load_profile
+from src.parser.os_stat import extract_os_stat
+from src.parser.time_model import extract_time_model
 from src.parser.top_events import extract_top_events
 from src.parser.top_sql import extract_top_sql
 
-# Initialize the logger for this specific module
 logger = logging.getLogger(__name__)
 
 
 class AWRParser:
-    """
-    Main parser class responsible for extracting data from AWR HTML files.
-    """
+    """Main parser class for Oracle AWR HTML reports."""
 
-    def parse(self, file_path: str | Path) -> AWRReport:
+    def parse(self, file_path: Path) -> AWRReport:
         """
-        Reads the AWR file and extracts all available metrics
-        into a validated Pydantic model.
+        Parses the HTML AWR report and returns a structured AWRReport model.
         """
-        path_obj = Path(file_path)
-        logger.info(f"Starting AWR parsing for file: {path_obj}")
+        logger.debug(f"Starting parsing for {file_path.name}")
 
-        if not path_obj.exists():
-            logger.error(f"File not found: {path_obj}")
-            raise AWRFileNotFoundError(f"AWR file not found at: {path_obj}")
+        # Read and parse HTML
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            soup = BeautifulSoup(f, "lxml")
 
-        try:
-            with open(path_obj, "r", encoding="utf-8") as f:
-                content = f.read()
-            logger.debug("Successfully read file content.")
+        # Extract Core Sections (Month 1)
+        db_info = extract_db_info(soup)
 
-            # --- HTML EXTRACTION LOGIC ---
-            soup = BeautifulSoup(content, "lxml")
+        # Desempacar la tupla del Load Profile de forma segura
+        lp_raw = None
+        lp_norm = None
+        extracted_lp = extract_load_profile(soup)
+        if extracted_lp and isinstance(extracted_lp, tuple) and len(extracted_lp) == 2:
+            lp_raw, lp_norm = extracted_lp
 
-            db_info_data = extract_db_info(soup)
-            raw_lp, norm_lp = extract_load_profile(soup)
-            top_events_data = extract_top_events(soup)
-            top_sql_data = extract_top_sql(soup)
-            # -----------------------------
+        top_events = extract_top_events(soup)
+        top_sql = extract_top_sql(soup)
 
-        except Exception as e:
-            logger.error(f"Unexpected error reading file {path_obj}: {e}")
-            raise ParserError(f"Failed to process AWR file: {e}") from e
+        # Extract CPU & System Sections (Month 2)
+        os_stat = extract_os_stat(soup)
+        time_model = extract_time_model(soup)
 
-        logger.info("Parsing completed successfully.")
-
-        # Return the root model injected with the real extracted data
+        # Assemble and return the complete report
         return AWRReport(
-            metadata=Metadata(),
-            db_info=db_info_data,
-            load_profile_raw=raw_lp,
-            load_profile_normalized=norm_lp,
-            top_events=top_events_data,
-            top_sql=top_sql_data,
+            metadata=Metadata(parser_warnings=[]),
+            db_info=db_info,
+            load_profile_raw=lp_raw,
+            load_profile_normalized=lp_norm,
+            os_stat=os_stat,
+            time_model=time_model,
+            top_events=top_events if top_events else [],
+            top_sql=top_sql if top_sql else [],
         )

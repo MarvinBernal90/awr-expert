@@ -52,6 +52,27 @@ class LoadProfileNormalized(BaseModel):
     hard_parses_per_sec: Optional[float] = None
 
 
+class OSStatRaw(BaseModel):
+    """Operating System Statistics (Values usually in centi-seconds)."""
+
+    num_cpus: Optional[int] = None
+    busy_time_cs: Optional[float] = None
+    idle_time_cs: Optional[float] = None
+    user_time_cs: Optional[float] = None
+    sys_time_cs: Optional[float] = None
+    iowait_time_cs: Optional[float] = None
+
+
+class TimeModelRaw(BaseModel):
+    """Time Model Statistics (Values usually in seconds)."""
+
+    db_time_s: Optional[float] = None
+    db_cpu_s: Optional[float] = None
+    sql_execute_s: Optional[float] = None
+    parse_time_s: Optional[float] = None
+    hard_parse_s: Optional[float] = None
+
+
 class TopEvent(BaseModel):
     """Represents a single database wait event entry from Top Events."""
 
@@ -87,5 +108,10 @@ class AWRReport(BaseModel):
     db_info: Optional[DBInfoRaw] = None
     load_profile_raw: Optional[LoadProfileRaw] = None
     load_profile_normalized: Optional[LoadProfileNormalized] = None
+
+    # --- Nuevos Modelos Añadidos para el Análisis de CPU ---
+    os_stat: Optional[OSStatRaw] = None
+    time_model: Optional[TimeModelRaw] = None
+
     top_events: List[TopEvent] = Field(default_factory=list)
     top_sql: List[TopSQL] = Field(default_factory=list)
