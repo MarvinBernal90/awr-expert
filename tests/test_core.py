@@ -34,6 +34,7 @@ def test_parser_returns_awr_report(sample_html_file: Path) -> None:
     # Since the HTML is fake, the default lists must be strictly empty
     assert report.top_events == []
     assert report.top_sql == []
+    assert report.wait_histograms == []
 
 
 def test_parser_raises_error_for_missing_file(tmp_path: Path) -> None:

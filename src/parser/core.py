@@ -15,6 +15,7 @@ from src.parser.os_stat import extract_os_stat
 from src.parser.time_model import extract_time_model
 from src.parser.top_events import extract_top_events
 from src.parser.top_sql import extract_top_sql
+from src.parser.wait_histogram import extract_wait_histograms
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class AWRParser:
         # Extract Core Sections (Month 1)
         db_info = extract_db_info(soup)
 
-        # Desempacar la tupla del Load Profile de forma segura
+        # Unpack the Load Profile tuple safely
         lp_raw = None
         lp_norm = None
         extracted_lp = extract_load_profile(soup)
@@ -49,6 +50,9 @@ class AWRParser:
         os_stat = extract_os_stat(soup)
         time_model = extract_time_model(soup)
 
+        # Extract I/O & Latency Sections (Month 2 - Sprint 6)
+        wait_histograms = extract_wait_histograms(soup)
+
         # Assemble and return the complete report
         return AWRReport(
             metadata=Metadata(parser_warnings=[]),
@@ -59,4 +63,5 @@ class AWRParser:
             time_model=time_model,
             top_events=top_events if top_events else [],
             top_sql=top_sql if top_sql else [],
+            wait_histograms=wait_histograms if wait_histograms else [],
         )
