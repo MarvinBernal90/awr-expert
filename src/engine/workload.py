@@ -27,11 +27,27 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
             "reason": "Missing Load Profile data in AWR.",
         }
 
-    # Extract metrics safely (Check new '_ps' format first, fallback to legacy format)
-    logical_reads = lp.logical_reads_ps or lp.logical_reads or 0.0
-    physical_reads = lp.physical_reads_ps or lp.physical_reads or 0.0
-    executes = lp.executes_ps or lp.executes or 0.0
-    transactions = lp.transactions_ps or lp.transactions or 0.0
+    # Extract metrics safely (Check for None instead of relying on falsy 0.0)
+    logical_reads = (
+        lp.logical_reads_ps
+        if lp.logical_reads_ps is not None
+        else (lp.logical_reads if lp.logical_reads is not None else 0.0)
+    )
+    physical_reads = (
+        lp.physical_reads_ps
+        if lp.physical_reads_ps is not None
+        else (lp.physical_reads if lp.physical_reads is not None else 0.0)
+    )
+    executes = (
+        lp.executes_ps
+        if lp.executes_ps is not None
+        else (lp.executes if lp.executes is not None else 0.0)
+    )
+    transactions = (
+        lp.transactions_ps
+        if lp.transactions_ps is not None
+        else (lp.transactions if lp.transactions is not None else 0.0)
+    )
 
     if all(v == 0.0 for v in (logical_reads, physical_reads, executes, transactions)):
         return {
