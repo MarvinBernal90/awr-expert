@@ -135,6 +135,12 @@ def main(
                     border_style="green",
                 )
             )
+    else:
+        # Fallback message when no engine generates a diagnosis
+        console.print(
+            "\n[bold yellow]ℹ No actionable diagnoses generated "
+            "(insufficient engine data).[/bold yellow]"
+        )
 
 
 if __name__ == "__main__":

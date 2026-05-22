@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 def extract_wait_histograms(soup: BeautifulSoup) -> List[WaitHistogramRaw]:
     """Extracts wait event histogram buckets and normalizes times to milliseconds."""
     histograms = []
-    try:
-        for table in soup.find_all("table"):
+
+    for table in soup.find_all("table"):
+        try:
             bucket_cols = {}
             event_col_idx = -1
 
@@ -92,7 +93,8 @@ def extract_wait_histograms(soup: BeautifulSoup) -> List[WaitHistogramRaw]:
                             except ValueError:
                                 pass
 
-    except Exception as e:
-        logger.error(f"Error parsing Wait Histograms: {e}")
+        except Exception:
+            # Use logger.exception to print the stack trace in debug logs but continue
+            logger.exception("Error parsing one Wait Histogram table; continuing.")
 
     return histograms
