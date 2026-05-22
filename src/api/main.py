@@ -8,7 +8,7 @@ import logging
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from src.engine.cpu import analyze_cpu
 from src.engine.io import analyze_io
 from src.engine.memory import analyze_memory
+from src.engine.workload import classify_workload
 from src.parser.core import AWRParser
 from src.services.db import initialize_warehouse
 from src.services.repository import AWRRepository
@@ -37,6 +38,7 @@ class AnalysisResponse(BaseModel):
     """Schema for the diagnostic analysis response."""
 
     awr_hash: str
+    workload_profile: Dict[str, Any]  # <-- NUEVO: Clasificador de Carga (Mes 4)
     diagnostics: List[Any]
 
 
@@ -164,15 +166,19 @@ def analyze_awr(awr_hash: str):
             status_code=404, detail=f"AWR report with hash {awr_hash} not found."
         )
 
-    # 1. Run all heuristic engines
+    # 1. Level 2: Context-Awareness (Workload Classifier)
+    workload_context = classify_workload(report)
+
+    # 2. Run all heuristic engines
     cpu_diagnosis = analyze_cpu(report)
     io_diagnosis = analyze_io(report)
     memory_diagnosis = analyze_memory(report)
 
-    # 2. Filter out skipped engines
+    # 3. Filter out skipped engines
     active_diagnoses = [d for d in (cpu_diagnosis, io_diagnosis, memory_diagnosis) if d]
 
     return AnalysisResponse(
         awr_hash=awr_hash,
+        workload_profile=workload_context,
         diagnostics=active_diagnoses,
     )
