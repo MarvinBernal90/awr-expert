@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from src.engine.cpu import analyze_cpu
+from src.engine.io import analyze_io
 from src.parser.core import AWRParser
 from src.services.db import initialize_warehouse
 from src.services.repository import AWRRepository
@@ -64,6 +65,7 @@ def main(
     console.print(f"  • DB CPU Consumed: [cyan]{db_cpu} s[/cyan]")
     console.print(f"  • Top Events Extracted: [cyan]{len(report.top_events)}[/cyan]")
     console.print(f"  • Top SQL Extracted: [cyan]{len(report.top_sql)}[/cyan]")
+    console.print(f"  • Wait Histograms: [cyan]{len(report.wait_histograms)}[/cyan]")
 
     # 2. Storage Phase (Optional)
     if save_to_db:
@@ -77,9 +79,15 @@ def main(
 
     # 3. Expert Engine Analysis Phase
     console.print("\n[bold blue]🧠 Running Expert AI Diagnostics...[/bold blue]")
-    cpu_diagnosis = analyze_cpu(report)
 
-    if cpu_diagnosis:
+    # Run all heuristic engines
+    cpu_diagnosis = analyze_cpu(report)
+    io_diagnosis = analyze_io(report)
+
+    # Filter out engines that skipped due to lack of specific data
+    active_diagnoses = [d for d in (cpu_diagnosis, io_diagnosis) if d]
+
+    if active_diagnoses:
         # Build Health Score Table
         table = Table(
             title="[bold]OVERALL HEALTH SCORE (Executive Summary)[/bold]",
@@ -91,33 +99,48 @@ def main(
         table.add_column("Severity", justify="center")
         table.add_column("Impact", justify="center")
 
-        # Determine color based on severity
-        sev_color = "bold green"
-        if cpu_diagnosis.severity == "WARN":
-            sev_color = "bold yellow"
-        elif cpu_diagnosis.severity == "CRITICAL":
-            sev_color = "bold red"
+        for diag in active_diagnoses:
+            # Determine color based on severity
+            sev_color = "bold green"
+            if diag.severity == "WARN":
+                sev_color = "bold yellow"
+            elif diag.severity == "CRITICAL":
+                sev_color = "bold red"
 
-        table.add_row(
-            cpu_diagnosis.area,
-            cpu_diagnosis.status,
-            f"[{sev_color}]{cpu_diagnosis.severity}[/{sev_color}]",
-            cpu_diagnosis.impact,
-        )
+            table.add_row(
+                diag.area,
+                diag.status,
+                f"[{sev_color}]{diag.severity}[/{sev_color}]",
+                diag.impact,
+            )
 
         console.print("\n")
         console.print(table)
 
         # Print Root Causes / Evidences
-        if cpu_diagnosis.findings:
+        all_findings = [f for d in active_diagnoses for f in d.findings]
+        if all_findings:
             console.print("\n[bold red]🔍 TOP ROOT CAUSES / Evidence:[/bold red]")
-            for finding in cpu_diagnosis.findings:
+            for finding in all_findings:
                 icon = "🔴" if finding.is_critical else "ℹ️"
                 console.print(f"  {icon} [white]{finding.description}[/white]")
 
-        # Print Recommendation
-        console.print("\n[bold green]💡 Expert Recommendation:[/bold green]")
-        console.print(Panel(cpu_diagnosis.recommendation, border_style="green"))
+        # Print Recommendations
+        console.print("\n[bold green]💡 Expert Recommendations:[/bold green]")
+        for diag in active_diagnoses:
+            console.print(
+                Panel(
+                    diag.recommendation,
+                    title=f"[bold]{diag.area}[/bold]",
+                    border_style="green",
+                )
+            )
+    else:
+        # Fallback message when no engine generates a diagnosis
+        console.print(
+            "\n[bold yellow]ℹ No actionable diagnoses generated "
+            "(insufficient engine data).[/bold yellow]"
+        )
 
 
 if __name__ == "__main__":

@@ -101,6 +101,14 @@ class TopSQL(BaseModel):
     sql_text: Optional[str] = None
 
 
+class WaitHistogramRaw(BaseModel):
+    """Represents a single bucket of latency for a specific wait event."""
+
+    event_name: str
+    wait_time_milli: float
+    wait_count: float
+
+
 class AWRReport(BaseModel):
     """The root model schema encompassing the entirety of the parsed AWR data."""
 
@@ -108,10 +116,9 @@ class AWRReport(BaseModel):
     db_info: Optional[DBInfoRaw] = None
     load_profile_raw: Optional[LoadProfileRaw] = None
     load_profile_normalized: Optional[LoadProfileNormalized] = None
-
-    # --- Nuevos Modelos Añadidos para el Análisis de CPU ---
     os_stat: Optional[OSStatRaw] = None
     time_model: Optional[TimeModelRaw] = None
 
     top_events: List[TopEvent] = Field(default_factory=list)
     top_sql: List[TopSQL] = Field(default_factory=list)
+    wait_histograms: List[WaitHistogramRaw] = Field(default_factory=list)
