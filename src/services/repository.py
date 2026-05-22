@@ -21,10 +21,15 @@ logger = logging.getLogger(__name__)
 class AWRRepository:
     """Handles data persistence for AWR Reports."""
 
+    def __init__(self, db_file: Optional[str] = None):
+        """Initializes the repository with a specific database file."""
+        # Use the provided file (for tests) or fallback to the global default
+        self.db_path = db_file or DB_PATH
+
     def save_report(self, awr_hash: str, report: AWRReport) -> None:
         """Saves a parsed AWR report into the DuckDB warehouse."""
         try:
-            with duckdb.connect(DB_PATH) as conn:
+            with duckdb.connect(self.db_path) as conn:
                 conn.execute(
                     """
                     INSERT INTO awr_reports (awr_hash, raw_payload)
@@ -44,7 +49,7 @@ class AWRRepository:
         deserializes it back into the AWRReport Pydantic model.
         """
         try:
-            with duckdb.connect(DB_PATH) as conn:
+            with duckdb.connect(self.db_path) as conn:
                 result = conn.execute(
                     "SELECT raw_payload FROM awr_reports WHERE awr_hash = ?",
                     [awr_hash],
