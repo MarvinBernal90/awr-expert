@@ -12,6 +12,7 @@ from rich.table import Table
 
 from src.engine.cpu import analyze_cpu
 from src.engine.io import analyze_io
+from src.engine.memory import analyze_memory
 from src.parser.core import AWRParser
 from src.services.db import initialize_warehouse
 from src.services.repository import AWRRepository
@@ -83,9 +84,10 @@ def main(
     # Run all heuristic engines
     cpu_diagnosis = analyze_cpu(report)
     io_diagnosis = analyze_io(report)
+    memory_diagnosis = analyze_memory(report)
 
     # Filter out engines that skipped due to lack of specific data
-    active_diagnoses = [d for d in (cpu_diagnosis, io_diagnosis) if d]
+    active_diagnoses = [d for d in (cpu_diagnosis, io_diagnosis, memory_diagnosis) if d]
 
     if active_diagnoses:
         # Build Health Score Table
