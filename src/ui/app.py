@@ -44,7 +44,7 @@ if uploaded_file:
                     "file": (uploaded_file.name, uploaded_file.getvalue(), "text/html")
                 }
                 try:
-                    # 1. Send the file to the FastAPI backend (with explicit timeout)
+                    # 1. Send the file to the FastAPI backend
                     upload_res = requests.post(
                         f"{API_URL}/upload", files=files, timeout=30
                     )
@@ -52,17 +52,18 @@ if uploaded_file:
                     upload_data = upload_res.json()
                     awr_hash = upload_data["awr_hash"]
 
-                    # 2. Query diagnostics (with explicit timeout)
+                    # 2. Query diagnostics
                     analysis_res = requests.get(
                         f"{API_URL}/analyze/{awr_hash}", timeout=30
                     )
                     analysis_res.raise_for_status()
-                    diagnostics = analysis_res.json()["diagnostics"]
+                    analysis_json = analysis_res.json()
 
                     # 3. Cache the results in Streamlit session state
                     st.session_state["analysis_data"] = {
                         "upload_data": upload_data,
-                        "diagnostics": diagnostics,
+                        "workload": analysis_json.get("workload_profile", {}),
+                        "diagnostics": analysis_json.get("diagnostics", []),
                     }
 
                 except requests.exceptions.Timeout:
@@ -75,7 +76,6 @@ if uploaded_file:
                     )
                     st.stop()
                 except requests.exceptions.HTTPError as e:
-                    # Safely parse JSON error message, fallback to raw text if it fails
                     try:
                         err_msg = e.response.json().get("detail", str(e))
                     except Exception:
@@ -86,6 +86,7 @@ if uploaded_file:
         # Render data directly from the cache
         data = st.session_state["analysis_data"]
         upload_data = data["upload_data"]
+        workload = data["workload"]
         diagnostics = data["diagnostics"]
 
         # Show basic info in the sidebar
@@ -95,7 +96,26 @@ if uploaded_file:
             f"**Elapsed Time:** {upload_data['elapsed_mins']} min"
         )
 
-        # 3. Render Executive Dashboard
+        # --- LEVEL 2: CONTEXT AWARENESS (NEW) ---
+        st.header("🤖 AI Context Awareness")
+        if workload:
+            wl_type = workload.get("workload_type", "UNKNOWN")
+            wl_conf = workload.get("confidence", 0.0)
+            wl_reason = workload.get("reason", "")
+
+            wl_col1, wl_col2, wl_col3 = st.columns([1, 1, 2])
+            with wl_col1:
+                st.metric(label="Detected Profile", value=wl_type)
+            with wl_col2:
+                st.metric(label="AI Confidence", value=f"{wl_conf}%")
+            with wl_col3:
+                st.info(f"**Reasoning:** {wl_reason}")
+        else:
+            st.warning("⚠️ Context engine skipped or unavailable.")
+
+        st.markdown("---")
+
+        # --- DIAGNOSTICS DASHBOARD ---
         st.header("📊 Overall Health Score")
 
         if not diagnostics:
