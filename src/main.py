@@ -7,12 +7,8 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from src.engine.cpu import analyze_cpu
-from src.engine.io import analyze_io
-from src.engine.memory import analyze_memory
+from src.engine.health_score import HealthScoreOrchestrator
 from src.parser.core import AWRParser
 from src.services.db import initialize_warehouse
 from src.services.repository import AWRRepository
@@ -79,70 +75,8 @@ def main(
         console.print(f"  • Idempotency Hash: [yellow]{awr_hash}[/yellow]")
 
     # 3. Expert Engine Analysis Phase
-    console.print("\n[bold blue]🧠 Running Expert AI Diagnostics...[/bold blue]")
-
-    # Run all heuristic engines
-    cpu_diagnosis = analyze_cpu(report)
-    io_diagnosis = analyze_io(report)
-    memory_diagnosis = analyze_memory(report)
-
-    # Filter out engines that skipped due to lack of specific data
-    active_diagnoses = [d for d in (cpu_diagnosis, io_diagnosis, memory_diagnosis) if d]
-
-    if active_diagnoses:
-        # Build Health Score Table
-        table = Table(
-            title="[bold]OVERALL HEALTH SCORE (Executive Summary)[/bold]",
-            show_header=True,
-            header_style="bold white",
-        )
-        table.add_column("Area", style="cyan", justify="left")
-        table.add_column("Status", style="white", justify="left")
-        table.add_column("Severity", justify="center")
-        table.add_column("Impact", justify="center")
-
-        for diag in active_diagnoses:
-            # Determine color based on severity
-            sev_color = "bold green"
-            if diag.severity == "WARN":
-                sev_color = "bold yellow"
-            elif diag.severity == "CRITICAL":
-                sev_color = "bold red"
-
-            table.add_row(
-                diag.area,
-                diag.status,
-                f"[{sev_color}]{diag.severity}[/{sev_color}]",
-                diag.impact,
-            )
-
-        console.print("\n")
-        console.print(table)
-
-        # Print Root Causes / Evidences
-        all_findings = [f for d in active_diagnoses for f in d.findings]
-        if all_findings:
-            console.print("\n[bold red]🔍 TOP ROOT CAUSES / Evidence:[/bold red]")
-            for finding in all_findings:
-                icon = "🔴" if finding.is_critical else "ℹ️"
-                console.print(f"  {icon} [white]{finding.description}[/white]")
-
-        # Print Recommendations
-        console.print("\n[bold green]💡 Expert Recommendations:[/bold green]")
-        for diag in active_diagnoses:
-            console.print(
-                Panel(
-                    diag.recommendation,
-                    title=f"[bold]{diag.area}[/bold]",
-                    border_style="green",
-                )
-            )
-    else:
-        # Fallback message when no engine generates a diagnosis
-        console.print(
-            "\n[bold yellow]ℹ No actionable diagnoses generated "
-            "(insufficient engine data).[/bold yellow]"
-        )
+    orchestrator = HealthScoreOrchestrator(console)
+    orchestrator.run_diagnostics(report)
 
 
 if __name__ == "__main__":
