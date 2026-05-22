@@ -33,6 +33,14 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
     executes = lp.executes_ps or 0.0
     transactions = lp.transactions_ps or 0.0
 
+    # --- SUGERENCIA DE CODERABBIT APLICADA ---
+    if all(v == 0.0 for v in (logical_reads, physical_reads, executes, transactions)):
+        return {
+            "workload_type": "UNKNOWN",
+            "confidence": 0.0,
+            "reason": "Load Profile present but required metrics are missing.",
+        }
+
     logger.debug(
         f"Metrics - L.Reads: {logical_reads}, P.Reads: {physical_reads}, "
         f"Execs: {executes}, Tx: {transactions}"
