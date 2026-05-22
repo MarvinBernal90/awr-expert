@@ -7,11 +7,14 @@ requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "duckdb>=1.5.3",
+    "fastapi>=0.136.1",
     "lxml>=6.1.0",
     "pydantic>=2.13.4",
     "pytest>=9.0.3",
+    "python-multipart>=0.0.29",
     "rich>=15.0.0",
     "typer>=0.25.1",
+    "uvicorn>=0.47.0",
 ]
 
 [dependency-groups]
