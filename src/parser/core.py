@@ -8,7 +8,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from src.models.base import AWRReport, Metadata
+from src.models.base import AWRReport, LoadProfile, Metadata
 from src.parser.db_info import extract_db_info
 
 # Soporte flexible para el extractor de Load Profile
@@ -40,7 +40,6 @@ class AWRParser:
 
         db_info = extract_db_info(soup)
 
-        # --- SUGERENCIA DE CODERABBIT: ACEPTAR EL NUEVO CONTRATO ---
         lp_raw = None
         lp_norm = None
         new_lp = None
@@ -48,10 +47,36 @@ class AWRParser:
         extracted_lp = extract_load_profile(soup)
         if extracted_lp:
             if isinstance(extracted_lp, tuple) and len(extracted_lp) == 2:
-                # Soporte Legacy
                 lp_raw, lp_norm = extracted_lp
+                if lp_raw or lp_norm:
+                    new_lp = LoadProfile(
+                        db_time=getattr(lp_raw, "db_time", None),
+                        logical_reads=getattr(lp_raw, "logical_reads", None),
+                        physical_reads=getattr(lp_raw, "physical_reads", None),
+                        executes=getattr(lp_raw, "executes", None),
+                        transactions=getattr(lp_raw, "transactions", None),
+                        logical_reads_ps=getattr(
+                            lp_norm,
+                            "logical_reads_ps",
+                            getattr(lp_norm, "logical_reads_per_sec", None),
+                        ),
+                        physical_reads_ps=getattr(
+                            lp_norm,
+                            "physical_reads_ps",
+                            getattr(lp_norm, "physical_reads_per_sec", None),
+                        ),
+                        executes_ps=getattr(
+                            lp_norm,
+                            "executes_ps",
+                            getattr(lp_norm, "executes_per_sec", None),
+                        ),
+                        transactions_ps=getattr(
+                            lp_norm,
+                            "transactions_ps",
+                            getattr(lp_norm, "transactions_per_sec", None),
+                        ),
+                    )
             else:
-                # Nuevo Modelo Mes 4
                 new_lp = extracted_lp
 
         top_events = extract_top_events(soup)
@@ -65,7 +90,7 @@ class AWRParser:
             db_info=db_info,
             load_profile_raw=lp_raw,
             load_profile_normalized=lp_norm,
-            load_profile=new_lp,  # <-- Ahora los datos fluyen a la IA
+            load_profile=new_lp,
             os_stat=os_stat,
             time_model=time_model,
             top_events=top_events if top_events else [],

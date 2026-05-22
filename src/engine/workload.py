@@ -27,13 +27,12 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
             "reason": "Missing Load Profile data in AWR.",
         }
 
-    # Extract metrics safely (default to 0 if None)
-    logical_reads = lp.logical_reads_ps or 0.0
-    physical_reads = lp.physical_reads_ps or 0.0
-    executes = lp.executes_ps or 0.0
-    transactions = lp.transactions_ps or 0.0
+    # Extract metrics safely (Check new '_ps' format first, fallback to legacy format)
+    logical_reads = lp.logical_reads_ps or lp.logical_reads or 0.0
+    physical_reads = lp.physical_reads_ps or lp.physical_reads or 0.0
+    executes = lp.executes_ps or lp.executes or 0.0
+    transactions = lp.transactions_ps or lp.transactions or 0.0
 
-    # --- SUGERENCIA DE CODERABBIT APLICADA ---
     if all(v == 0.0 for v in (logical_reads, physical_reads, executes, transactions)):
         return {
             "workload_type": "UNKNOWN",
