@@ -23,13 +23,20 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload your AWR report (HTML)", type=["html"])
 
 if uploaded_file:
-    # Detect if a new file was uploaded to clear previous cache
-    if st.session_state.get("current_file") != uploaded_file.name:
-        st.session_state["current_file"] = uploaded_file.name
+    # Detect if file content changed by tracking file ID
+    file_id = id(uploaded_file)
+    if st.session_state.get("current_file_id") != file_id:
+        st.session_state["current_file_id"] = file_id
         st.session_state.pop("analysis_data", None)
 
     # Execution trigger
-    if st.sidebar.button("Run AI Analysis") or "analysis_data" in st.session_state:
+    run_analysis = st.sidebar.button("Run AI Analysis")
+
+    # Clear cache if user explicitly requests re-analysis
+    if run_analysis:
+        st.session_state.pop("analysis_data", None)
+
+    if run_analysis or "analysis_data" in st.session_state:
         # Only call the API if we don't have the data in cache
         if "analysis_data" not in st.session_state:
             with st.spinner("Analyzing report with heuristic engine..."):
