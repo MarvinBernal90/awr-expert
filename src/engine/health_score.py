@@ -17,6 +17,7 @@ class HealthScoreOrchestrator:
     """Runs all heuristic engines and orchestrates the visual output."""
 
     def __init__(self, console: Console):
+        """Initializes the orchestrator with a rich console instance."""
         self.console = console
 
     def run_diagnostics(self, report: AWRReport) -> None:
@@ -70,8 +71,12 @@ class HealthScoreOrchestrator:
         self.console.print("\n")
         self.console.print(table)
 
-        # 4. Print Root Causes / Evidence
-        all_findings = [f for d in active_diagnoses for f in d.findings]
+        # 4. Print Root Causes / Evidence (Sorted by criticality)
+        all_findings = sorted(
+            (f for d in active_diagnoses for f in d.findings),
+            key=lambda finding: not finding.is_critical,
+        )
+
         if all_findings:
             self.console.print("\n[bold red]🔍 TOP ROOT CAUSES / Evidence:[/bold red]")
             for finding in all_findings:
