@@ -12,6 +12,7 @@ class Metadata(BaseModel):
     """Stores metadata about the parsing process itself."""
 
     parser_warnings: List[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="allow")
 
 
 class DBInfoRaw(BaseModel):
@@ -25,13 +26,12 @@ class DBInfoRaw(BaseModel):
     elapsed_time_min: Optional[float] = None
     is_rac: Optional[bool] = None
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("cpus")
     @classmethod
     def validate_cpus(cls, v):
         if v is not None and v <= 0:
-            # Ajustado para que el test unitario lo reconozca
             raise ValueError("CPUs must be greater than zero.")
         return v
 
@@ -39,25 +39,32 @@ class DBInfoRaw(BaseModel):
 class OSStatRaw(BaseModel):
     """Operating System Statistics (e.g., CPU Utilization)."""
 
-    stat_name: str
-    value: float
+    stat_name: Optional[str] = None
+    value: Optional[float] = None
+
+    num_cpus: Optional[int] = None
+    busy_time_cs: Optional[float] = None
+    idle_time_cs: Optional[float] = None
+    iowait_time_cs: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class TopEvent(BaseModel):
     """A single wait event from the 'Top 10 Foreground Events' table."""
 
-    event_name: str
-    pct_db_time: float
+    event_name: Optional[str] = None
+    pct_db_time: Optional[float] = None
     wait_class: Optional[str] = None
     waits: Optional[int] = None
     time_s: Optional[float] = None
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("pct_db_time")
     @classmethod
     def validate_pct(cls, v):
-        if not (0.0 <= v <= 100.0):
+        if v is not None and not (0.0 <= v <= 100.0):
             raise ValueError("Percentage must be between 0 and 100")
         return v
 
@@ -65,60 +72,94 @@ class TopEvent(BaseModel):
 class TopSQL(BaseModel):
     """Statistics for a specific SQL statement (e.g., Top SQL by Elapsed Time)."""
 
-    sql_id: str
-    elapsed_time_s: float
-    executions: int
+    sql_id: Optional[str] = None
+    elapsed_time_s: Optional[float] = None
+    executions: Optional[int] = None
     sql_text: Optional[str] = None
     cpu_time_s: Optional[float] = None
     user_io_wait_time_s: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class TimeModelRaw(BaseModel):
     """Raw Time Model Statistics."""
 
-    stat_name: str
-    time_s: float
+    stat_name: Optional[str] = None
+    time_s: Optional[float] = None
     pct_db_time: Optional[float] = None
 
-    model_config = ConfigDict(extra="ignore")
+    db_time_s: Optional[float] = None
+    db_cpu_s: Optional[float] = None
+    background_cpu_s: Optional[float] = None
+    sql_exec_time_s: Optional[float] = None
+    hard_parse_s: Optional[float] = None
+    sql_execute_s: Optional[float] = None
+    parse_time_s: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class WaitHistogramRaw(BaseModel):
     """Raw Wait Event Histogram Statistics."""
 
-    event_name: str
-    wait_time_ms: float
-    wait_count: int
+    event_name: Optional[str] = None
+    wait_time_ms: Optional[float] = None
+    wait_count: Optional[int] = None
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
 
 
 # --- Load Profile Models ---
 class LoadProfileRaw(BaseModel):
     """Raw metrics per second from the Load Profile (Legacy)."""
 
+    db_time: Optional[float] = None
+    logical_reads: Optional[float] = None
+    physical_reads: Optional[float] = None
+    executes: Optional[float] = None
+    transactions: Optional[float] = None
+
     logical_reads_ps: Optional[float] = None
     physical_reads_ps: Optional[float] = None
     executes_ps: Optional[float] = None
     transactions_ps: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class LoadProfileNormalized(BaseModel):
     """Normalized metrics per second from the Load Profile (Legacy)."""
 
+    db_time: Optional[float] = None
+    logical_reads: Optional[float] = None
+    physical_reads: Optional[float] = None
+    executes: Optional[float] = None
+    transactions: Optional[float] = None
+
     logical_reads_ps: Optional[float] = None
     physical_reads_ps: Optional[float] = None
     executes_ps: Optional[float] = None
     transactions_ps: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class LoadProfile(BaseModel):
     """Unified metrics per second from the Load Profile table."""
 
+    db_time: Optional[float] = None
+    logical_reads: Optional[float] = None
+    physical_reads: Optional[float] = None
+    executes: Optional[float] = None
+    transactions: Optional[float] = None
+
     logical_reads_ps: Optional[float] = None
     physical_reads_ps: Optional[float] = None
     executes_ps: Optional[float] = None
     transactions_ps: Optional[float] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class AWRReport(BaseModel):
@@ -126,19 +167,15 @@ class AWRReport(BaseModel):
 
     metadata: Metadata
     db_info: Optional[DBInfoRaw] = None
-
-    # Soporte para código Legacy
     load_profile_raw: Optional[LoadProfileRaw] = None
     load_profile_normalized: Optional[LoadProfileNormalized] = None
-
-    # Nuevo modelo del Mes 4
     load_profile: Optional[LoadProfile] = None
 
-    # Ajustado con Optional y nombres exactos para coincidir con core.py
-    os_stat: Optional[List[OSStatRaw]] = Field(default_factory=list)
+    os_stat: Optional[OSStatRaw] = None
+    time_model: Optional[TimeModelRaw] = None
+
     top_events: Optional[List[TopEvent]] = Field(default_factory=list)
     top_sql: Optional[List[TopSQL]] = Field(default_factory=list)
-    time_model: Optional[List[TimeModelRaw]] = Field(default_factory=list)
     wait_histograms: Optional[List[WaitHistogramRaw]] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
