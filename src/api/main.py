@@ -84,6 +84,8 @@ async def upload_awr(file: UploadFile = File(...)):
     try:
         # 1. Stream the file directly to disk while hashing it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+            tmp_path = Path(tmp.name)  # <-- Assigned immediately to prevent leaks
+
             while chunk := await file.read(1024 * 1024):
                 size += len(chunk)
                 if size > max_bytes:
@@ -93,8 +95,6 @@ async def upload_awr(file: UploadFile = File(...)):
 
             if size == 0:
                 raise HTTPException(status_code=400, detail="Empty file provided.")
-
-            tmp_path = Path(tmp.name)
 
         awr_hash = hasher.hexdigest()
 
