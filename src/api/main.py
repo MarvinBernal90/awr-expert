@@ -75,30 +75,46 @@ async def upload_awr(file: UploadFile = File(...)):
     if not file.filename or not file.filename.endswith(".html"):
         raise HTTPException(status_code=400, detail="Only HTML files are supported.")
 
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file provided.")
-
-    # 1. Calculate idempotency hash
-    awr_hash = hashlib.sha256(content).hexdigest()
-
-    # 2. Parse the AWR using a secure temporary file
+    max_bytes = 20 * 1024 * 1024  # 20 MB Limit
+    size = 0
+    hasher = hashlib.sha256()
     parser = AWRParser()
+    tmp_path: Path | None = None
+
     try:
+        # 1. Stream the file directly to disk while hashing it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
-            tmp.write(content)
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise HTTPException(status_code=413, detail="File too large.")
+                hasher.update(chunk)
+                tmp.write(chunk)
+
+            if size == 0:
+                raise HTTPException(status_code=400, detail="Empty file provided.")
+
             tmp_path = Path(tmp.name)
 
-        report = parser.parse(tmp_path)
-        tmp_path.unlink()  # Clean up immediately after parsing
+        awr_hash = hasher.hexdigest()
 
+        # 2. Parse the AWR from the local temporary file
+        report = parser.parse(tmp_path)
+
+    except HTTPException:
+        # Re-raise known API errors to prevent wrapping them in a 500
+        raise
     except Exception as e:
         logger.error(f"Failed to parse AWR: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to parse AWR report: {str(e)}"
         )
+    finally:
+        # 3. ALWAYS clean up the temporary file
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
 
-    # 3. Save to DuckDB Warehouse
+    # 4. Save to DuckDB Warehouse
     repo = AWRRepository()
     try:
         repo.save_report(awr_hash, report)
@@ -108,7 +124,7 @@ async def upload_awr(file: UploadFile = File(...)):
             status_code=500, detail="Failed to save parsed metrics to the warehouse."
         )
 
-    # 4. Extract basic info for the response payload
+    # 5. Extract basic info for the response payload
     db_name = (
         report.db_info.db_name
         if report.db_info and report.db_info.db_name
@@ -135,7 +151,13 @@ def analyze_awr(awr_hash: str):
     runs the heuristic engines, and returns the diagnostics.
     """
     repo = AWRRepository()
-    report = repo.get_report(awr_hash)
+
+    try:
+        report = repo.get_report(awr_hash)
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Internal server error during database retrieval."
+        )
 
     if not report:
         raise HTTPException(

@@ -23,7 +23,6 @@ class AWRRepository:
 
     def __init__(self, db_file: Optional[str] = None):
         """Initializes the repository with a specific database file."""
-        # Use the provided file (for tests) or fallback to the global default
         self.db_path = db_file or DB_PATH
 
     def save_report(self, awr_hash: str, report: AWRReport) -> None:
@@ -59,6 +58,6 @@ class AWRRepository:
                     # Pydantic v2 magic: reconstruct the object from JSON string
                     return AWRReport.model_validate_json(result[0])
                 return None
-        except Exception as e:
-            logger.error(f"Failed to retrieve report {awr_hash}: {e}")
-            return None
+        except Exception:
+            logger.exception("Failed to retrieve report %s", awr_hash)
+            raise
