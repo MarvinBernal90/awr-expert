@@ -47,7 +47,8 @@ if uploaded_file:
 
             if not diagnostics:
                 st.success(
-                    "✨ All good! No critical bottlenecks detected. The database is healthy."
+                    "✨ All good! No critical bottlenecks detected. "
+                    "The database is healthy."
                 )
             else:
                 for diag in diagnostics:
@@ -92,7 +93,8 @@ if uploaded_file:
 
         except requests.exceptions.ConnectionError:
             st.error(
-                "🚨 Connection error. Ensure your FastAPI server is running on port 8000."
+                "🚨 Connection error. Ensure your FastAPI "
+                "server is running on port 8000."
             )
         except requests.exceptions.HTTPError as e:
             st.error(f"🚨 API Error: {e.response.json().get('detail', str(e))}")
