@@ -22,7 +22,6 @@ def render_behavioral_chart(
     m_name: str, display_name: str, m_data: Dict[str, Any], raw_series: List[Dict]
 ):
     """Generates an interactive Plotly chart for time-series evaluation."""
-    # Extract and sort chronologically (assuming DuckDB returns newest at end)
     y_vals = [float(s.get(m_name, 0)) for s in raw_series]
 
     current_val = m_data.get("current", 0)
@@ -30,15 +29,15 @@ def render_behavioral_chart(
     status = m_data.get("status", "NORMAL")
 
     # Semantic colors for status indication
-    marker_color = "#00CC96"  # Green (Normal)
+    marker_color = "#00CC96"
     if "CRITICAL" in status:
-        marker_color = "#EF553B"  # Red
+        marker_color = "#EF553B"
     elif "WARNING" in status:
-        marker_color = "#FFA15A"  # Orange
+        marker_color = "#FFA15A"
 
     fig = go.Figure()
 
-    # 1. Historical line (Gray)
+    # Historical timeline (Gray)
     fig.add_trace(
         go.Scatter(
             y=y_vals,
@@ -49,7 +48,7 @@ def render_behavioral_chart(
         )
     )
 
-    # 2. P95 Line (Dotted Blue)
+    # P95 Ceiling Indicator
     if p95 > 0:
         fig.add_hline(
             y=p95,
@@ -59,10 +58,10 @@ def render_behavioral_chart(
             annotation_position="top right",
         )
 
-    # 3. Current Snapshot (Highlighted point)
+    # Current Snapshot Anomaly Highlight
     fig.add_trace(
         go.Scatter(
-            x=[len(y_vals)],  # Place it at the end of the series
+            x=[len(y_vals)],
             y=[current_val],
             mode="markers+text",
             name="Current",
@@ -110,11 +109,18 @@ if uploaded_file:
                     )
                 }
                 try:
-                    upload_res = requests.post(f"{API_URL}/upload", files=files)
+                    # Enforce timeout boundary to prevent UI lockup
+                    request_timeout = (5, 120)
+
+                    upload_res = requests.post(
+                        f"{API_URL}/upload", files=files, timeout=request_timeout
+                    )
                     upload_res.raise_for_status()
                     awr_hash = upload_res.json()["awr_hash"]
 
-                    analysis_res = requests.get(f"{API_URL}/analyze/{awr_hash}")
+                    analysis_res = requests.get(
+                        f"{API_URL}/analyze/{awr_hash}", timeout=request_timeout
+                    )
                     analysis_res.raise_for_status()
 
                     st.session_state["analysis_data"] = {
@@ -126,7 +132,6 @@ if uploaded_file:
                     st.error(f"🚨 Integration Error: {str(e)}")
                     st.stop()
 
-        # Data rendering
         data = st.session_state["analysis_data"]
         upload_data = data["upload"]
         analysis_data = data["analysis"]
@@ -134,7 +139,7 @@ if uploaded_file:
         st.sidebar.success("✅ Context Loaded")
         st.sidebar.info(f"**DB:** {upload_data['db_name']}")
 
-        # --- LEVEL 1: WORKLOAD PROFILE ---
+        # LEVEL 1: WORKLOAD PROFILE
         wl = analysis_data.get("workload_profile", {})
         st.header("🤖 Workload Profile")
         col_w1, col_w2, col_w3 = st.columns([1, 1, 2])
@@ -143,37 +148,40 @@ if uploaded_file:
         col_w3.info(f"**Reasoning:** {wl.get('reason', '')}")
         st.markdown("---")
 
-        # --- LEVEL 2: BEHAVIORAL ANALYSIS (PLOTLY) ---
+        # LEVEL 2: BEHAVIORAL ANALYSIS (PLOTLY)
         behav = analysis_data.get("behavioral_analysis", {})
-        history_size = behav.get("history_size", 0)
 
-        st.header(f"📈 Behavioral Analytics (Last {history_size} snapshots)")
-
-        if history_size > 0:
-            metrics_data = behav.get("metrics", {})
-            raw_series = behav.get("raw_time_series", [])
-
-            # 2x2 matrix layout for the charts
-            m_mappings = [
-                ("logical_reads_ps", "Logical Reads/s"),
-                ("physical_reads_ps", "Physical Reads/s"),
-                ("executes_ps", "Executes/s"),
-                ("transactions_ps", "Transactions/s"),
-            ]
-
-            g_col1, g_col2 = st.columns(2)
-
-            for idx, (m_key, display) in enumerate(m_mappings):
-                target_col = g_col1 if idx % 2 == 0 else g_col2
-                with target_col:
-                    m_eval = metrics_data.get(m_key, {})
-                    render_behavioral_chart(m_key, display, m_eval, raw_series)
+        # Handle upstream failure gracefully
+        if behav.get("status") == "UNAVAILABLE":
+            st.error(f"⚠️ {behav.get('reason')}")
         else:
-            st.warning("Not enough historical data to compute baselines.")
+            history_size = behav.get("history_size", 0)
+            st.header(f"📈 Behavioral Analytics (Last {history_size} snapshots)")
+
+            if history_size > 0:
+                metrics_data = behav.get("metrics", {})
+                raw_series = behav.get("raw_time_series", [])
+
+                m_mappings = [
+                    ("logical_reads_ps", "Logical Reads/s"),
+                    ("physical_reads_ps", "Physical Reads/s"),
+                    ("executes_ps", "Executes/s"),
+                    ("transactions_ps", "Transactions/s"),
+                ]
+
+                g_col1, g_col2 = st.columns(2)
+
+                for idx, (m_key, display) in enumerate(m_mappings):
+                    target_col = g_col1 if idx % 2 == 0 else g_col2
+                    with target_col:
+                        m_eval = metrics_data.get(m_key, {})
+                        render_behavioral_chart(m_key, display, m_eval, raw_series)
+            else:
+                st.warning("Not enough historical data to compute baselines.")
 
         st.markdown("---")
 
-        # --- LEVEL 3: STRUCTURED DIAGNOSTICS ---
+        # LEVEL 3: STRUCTURED DIAGNOSTICS
         st.header("📊 Structured Diagnostics")
         diagnostics = analysis_data.get("diagnostics", [])
 

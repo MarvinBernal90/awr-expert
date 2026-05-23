@@ -62,7 +62,6 @@ class AWRRepository:
             logger.exception("Failed to retrieve report %s", awr_hash)
             raise
 
-    # --- SPRINT 12: DYNAMIC BASELINES ---
     def get_historical_baselines(self, db_name: str) -> Dict[str, Any]:
         """
         Dives into the JSON payloads using DuckDB analytics to calculate
@@ -118,11 +117,13 @@ class AWRRepository:
             logger.error(f"Failed to calculate baselines for {db_name}: {e}")
             return {}
 
-    # --- SPRINT 13: TIME-SERIES INTELLIGENCE ---
-    def get_time_series(self, db_name: str, limit: int = 30) -> List[Dict[str, Any]]:
+    def get_time_series(
+        self, db_name: str, limit: int = 30, exclude_awr_hash: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Extracts the historical time-series data for a specific database.
-        Returns a list of metrics per snapshot to feed the Analytics Engine.
+        Extracts the historical time-series data chronologically.
+        Filters out the provided hash to prevent the current sample
+        from skewing its own baseline.
         """
         try:
             with duckdb.connect(self.db_path) as conn:
@@ -138,7 +139,10 @@ class AWRRepository:
 
                 query = f"""
                     SELECT
-                        awr_hash,
+                        COALESCE(
+                            json_extract_string(raw_payload, '$.db_info.end_time'),
+                            awr_hash
+                        ) as snapshot_id,
                         CAST(COALESCE(
                             json_extract_string(raw_payload, {l_ps}),
                             json_extract_string(raw_payload, {l_rw})
@@ -157,13 +161,24 @@ class AWRRepository:
                         ) AS DOUBLE) as tx
                     FROM awr_reports
                     WHERE json_extract_string(raw_payload, {db_n}) = ?
-                    LIMIT ?
                 """
 
-                results = conn.execute(query, [db_name, limit]).fetchall()
+                params: List[Any] = [db_name]
 
+                # Exclude the current report from the historical cohort
+                if exclude_awr_hash:
+                    query += " AND awr_hash != ?"
+                    params.append(exclude_awr_hash)
+
+                # Order chronologically (newest first) before limiting
+                query += " ORDER BY rowid DESC LIMIT ?"
+                params.append(limit)
+
+                results = conn.execute(query, params).fetchall()
+
+                # Reverse back to oldest-first for proper charting
                 time_series = []
-                for row in results:
+                for row in reversed(results):
                     time_series.append(
                         {
                             "snapshot_id": row[0],

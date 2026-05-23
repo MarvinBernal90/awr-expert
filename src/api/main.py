@@ -25,7 +25,6 @@ from src.services.repository import AWRRepository
 logger = logging.getLogger(__name__)
 
 
-# --- Models ---
 class UploadResponse(BaseModel):
     """Schema for the successful upload response."""
 
@@ -40,11 +39,10 @@ class AnalysisResponse(BaseModel):
 
     awr_hash: str
     workload_profile: Dict[str, Any]
-    behavioral_analysis: Dict[str, Any]  # <-- NUEVO: Contexto Estadístico Cognitivo
+    behavioral_analysis: Dict[str, Any]
     diagnostics: List[Any]
 
 
-# --- Lifespan Manager ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles startup and shutdown events for the API."""
@@ -54,7 +52,6 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down AWR Expert API...")
 
 
-# --- API Bootstrap ---
 app = FastAPI(
     title="AWR Expert API",
     description="Enterprise API for Oracle AWR telemetry extraction and heuristics.",
@@ -63,23 +60,19 @@ app = FastAPI(
 )
 
 
-# --- Routes ---
 @app.get("/health")
 def health_check() -> dict:
-    """Standard health check endpoint for container orchestrators (e.g., Kubernetes)."""
+    """Standard health check endpoint for container orchestrators."""
     return {"status": "up", "version": "1.0.0"}
 
 
 @app.post("/upload", response_model=UploadResponse)
 async def upload_awr(file: UploadFile = File(...)):
-    """
-    Receives an AWR HTML file, parses it, stores the JSON in DuckDB,
-    and returns an idempotency hash for future diagnostic querying.
-    """
+    """Receives and parses an AWR HTML file, storing it in DuckDB."""
     if not file.filename or not file.filename.endswith(".html"):
         raise HTTPException(status_code=400, detail="Only HTML files are supported.")
 
-    max_bytes = 20 * 1024 * 1024  # 20 MB Limit
+    max_bytes = 20 * 1024 * 1024
     size = 0
     hasher = hashlib.sha256()
     parser = AWRParser()
@@ -88,7 +81,6 @@ async def upload_awr(file: UploadFile = File(...)):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
             tmp_path = Path(tmp.name)
-
             while chunk := await file.read(1024 * 1024):
                 size += len(chunk)
                 if size > max_bytes:
@@ -106,9 +98,7 @@ async def upload_awr(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"Failed to parse AWR: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to parse AWR report: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to parse report: {e}")
     finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
@@ -118,9 +108,7 @@ async def upload_awr(file: UploadFile = File(...)):
         repo.save_report(awr_hash, report)
     except Exception as e:
         logger.error(f"Database error: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to save parsed metrics to the warehouse."
-        )
+        raise HTTPException(status_code=500, detail="Failed to save to warehouse.")
 
     db_name = (
         report.db_info.db_name
@@ -143,10 +131,7 @@ async def upload_awr(file: UploadFile = File(...)):
 
 @app.get("/analyze/{awr_hash}", response_model=AnalysisResponse)
 def analyze_awr(awr_hash: str):
-    """
-    Retrieves a previously parsed AWR report by its hash,
-    runs the heuristic engines, and returns the diagnostics.
-    """
+    """Retrieves an AWR report and runs all cognitive heuristic engines."""
     repo = AWRRepository()
 
     try:
@@ -165,14 +150,14 @@ def analyze_awr(awr_hash: str):
         report.db_info.db_name if report.db_info and report.db_info.db_name else None
     )
 
-    # --- SPRINT 13: BEHAVIORAL ANALYTICS LAYER ---
     behavioral_data = {}
     if db_name:
         try:
-            # 1. Fetch the raw time-series movie (Last 30 snapshots)
-            time_series = repo.get_time_series(db_name, limit=30)
+            # Prevent data leakage: exclude the current snapshot from its own baseline
+            time_series = repo.get_time_series(
+                db_name, limit=30, exclude_awr_hash=awr_hash
+            )
 
-            # 2. Extract current snapshot metrics cleanly
             lp = report.load_profile or report.load_profile_raw
             if lp:
                 current_metrics = {
@@ -198,20 +183,20 @@ def analyze_awr(awr_hash: str):
                     ),
                 }
 
-                # 3. Ignite the Cognitive Statistical Engine
                 analyzer = BehavioralAnalyzer(min_samples=3)
                 behavioral_data = analyzer.analyze_workload(
                     current_metrics, time_series
                 )
-
-                # Inyectamos el raw array para que UI lo dibuje (Plotly)
                 behavioral_data["raw_time_series"] = time_series
 
-        except Exception as e:
-            logger.warning(f"Could not calculate behavioral analytics: {e}")
+        except Exception:
+            logger.exception("Could not calculate behavioral analytics")
+            behavioral_data = {
+                "status": "UNAVAILABLE",
+                "reason": "Behavioral analytics could not be calculated.",
+            }
 
     workload_context = classify_workload(report)
-
     cpu_diagnosis = analyze_cpu(report)
     io_diagnosis = analyze_io(report)
     memory_diagnosis = analyze_memory(report)

@@ -4,6 +4,7 @@ Calculates percentiles, standard deviations, and Z-Scores for time-series data.
 """
 
 import logging
+import math
 import statistics
 from typing import Any, Dict, List
 
@@ -11,14 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class BehavioralAnalyzer:
-    """Evaluates current database metrics against historical
+    """
+    Evaluates current database metrics against historical
     time-series distributions.
     """
 
     def __init__(self, min_samples: int = 3):
         """
         Args:
-            min_samples: Minimum historical snapshots required to calculate statistical
+            min_samples: Minimum historical snapshots required to calculate
                          variance safely. Below this, we fallback to simple math.
         """
         self.min_samples = min_samples
@@ -28,13 +30,12 @@ class BehavioralAnalyzer:
         self.Z_SCORE_WARNING = 2.0  # 95% confidence of anomaly
 
     def _calculate_p95(self, data: List[float]) -> float:
-        """Calculates the 95th percentile using nearest-rank method."""
+        """Calculates the 95th percentile using nearest-rank method safely."""
         if not data:
             return 0.0
         sorted_data = sorted(data)
-        index = int(0.95 * len(sorted_data))
-        # Handle edge cases for very small lists
-        index = min(index, len(sorted_data) - 1)
+        # Safe nearest-rank index to prevent out-of-bounds on exact multiples
+        index = max(0, math.ceil(0.95 * len(sorted_data)) - 1)
         return sorted_data[index]
 
     def _evaluate_metric(
@@ -65,15 +66,16 @@ class BehavioralAnalyzer:
 
             # Prevent division by zero if all historical values are perfectly identical
             if stdev == 0.0:
-                z_score = 0.0 if current_val == mean else float("inf")
+                if current_val == mean:
+                    z_score = 0.0
+                else:
+                    z_score = float("inf") if current_val > mean else float("-inf")
             else:
                 z_score = (current_val - mean) / stdev
         else:
             # Not enough data for variance, fallback to simple deviation proxy
             stdev = 0.0
-            z_score = (
-                deviation_pct / 25.0
-            )  # Naive scaling: every 25% deviation = 1 Z-Score unit
+            z_score = deviation_pct / 25.0
 
         # Determine Cognitive Status
         status = "NORMAL"
@@ -104,7 +106,7 @@ class BehavioralAnalyzer:
         the DuckDB time-series. Returns a cognitive assessment ready
         for the LLM correlation engine.
         """
-        metrics_to_evaluate = [
+        metrics_to_eval = [
             "logical_reads_ps",
             "physical_reads_ps",
             "executes_ps",
@@ -113,7 +115,7 @@ class BehavioralAnalyzer:
 
         analysis_result = {"history_size": len(time_series), "metrics": {}}
 
-        for metric in metrics_to_evaluate:
+        for metric in metrics_to_eval:
             current_val = current_metrics.get(metric, 0.0)
 
             # Extract just this metric's history from the full time-series list
