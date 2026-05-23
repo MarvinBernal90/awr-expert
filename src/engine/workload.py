@@ -1,20 +1,23 @@
 """
-Workload Classifier Engine (Month 4 - Adaptive Intelligence).
+Workload Classifier Engine (Adaptive Intelligence).
 Analyzes the Load Profile to determine the type of database workload (OLTP, DW, MIXED).
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from src.models.base import AWRReport
 
 logger = logging.getLogger(__name__)
 
 
-def classify_workload(report: AWRReport) -> Dict[str, Any]:
+def classify_workload(
+    report: AWRReport, baselines: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Classifies the database workload based on Load Profile heuristics.
-    Returns a dictionary with the classification and the confidence score.
+    Returns a dictionary with the classification, confidence score,
+    and baseline deviations.
     """
     # 1. Obtain Load Profile Data (Supporting both legacy and new structures)
     lp = report.load_profile or report.load_profile_raw
@@ -25,6 +28,7 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
             "workload_type": "UNKNOWN",
             "confidence": 0.0,
             "reason": "Missing Load Profile data in AWR.",
+            "baselines": {},
         }
 
     # Extract metrics safely (Check for None instead of relying on falsy 0.0)
@@ -54,6 +58,7 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
             "workload_type": "UNKNOWN",
             "confidence": 0.0,
             "reason": "Load Profile present but required metrics are missing.",
+            "baselines": {},
         }
 
     logger.debug(
@@ -78,7 +83,6 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
     # OLTP Heuristics (High executes, high transactions, mostly logical reads)
     elif executes > 1000 or transactions > 100:
         workload_type = "OLTP"
-        # Confidence increases if physical reads are low compared to logical reads
         if logical_reads > 0:
             hit_ratio = (logical_reads - physical_reads) / logical_reads
             if hit_ratio > 0.90:
@@ -94,8 +98,44 @@ def classify_workload(report: AWRReport) -> Dict[str, Any]:
                     "are somewhat high for pure OLTP."
                 )
 
+    # 3. Dynamic Baselines Evaluation
+    deviation_analysis = {}
+    if baselines and baselines.get("total_reports", 0) > 0:
+        metrics_eval = {}
+        for metric_name, current_val in [
+            ("logical_reads_ps", logical_reads),
+            ("physical_reads_ps", physical_reads),
+            ("executes_ps", executes),
+            ("transactions_ps", transactions),
+        ]:
+            avg_val = baselines.get(metric_name, 0.0)
+            if avg_val > 0:
+                pct_diff = ((current_val - avg_val) / avg_val) * 100.0
+            else:
+                pct_diff = 0.0
+
+            status = "NORMAL"
+            # Flag deviations greater than 25%
+            if pct_diff > 25.0:
+                status = "HIGH"
+            elif pct_diff < -25.0:
+                status = "LOW"
+
+            metrics_eval[metric_name] = {
+                "current": round(current_val, 2),
+                "average": round(avg_val, 2),
+                "deviation_pct": round(pct_diff, 1),
+                "status": status,
+            }
+
+        deviation_analysis = {
+            "history_size": baselines["total_reports"],
+            "metrics": metrics_eval,
+        }
+
     return {
         "workload_type": workload_type,
         "confidence": round(confidence, 1),
         "reason": reason,
+        "baselines": deviation_analysis,
     }
