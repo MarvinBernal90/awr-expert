@@ -4,7 +4,7 @@ Handles storage and retrieval of parsed metrics from DuckDB.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import duckdb
 
@@ -61,3 +61,60 @@ class AWRRepository:
         except Exception:
             logger.exception("Failed to retrieve report %s", awr_hash)
             raise
+
+    # --- SPRINT 12: DYNAMIC BASELINES ---
+    def get_historical_baselines(self, db_name: str) -> Dict[str, Any]:
+        """
+        Dives into the JSON payloads using DuckDB analytics to calculate
+        historical averages for a specific database.
+        """
+        try:
+            with duckdb.connect(self.db_path) as conn:
+                # Usamos variables para acortar las líneas de la consulta SQL
+                l_ps = "'$.load_profile.logical_reads_ps'"
+                l_rw = "'$.load_profile.logical_reads'"
+                p_ps = "'$.load_profile.physical_reads_ps'"
+                p_rw = "'$.load_profile.physical_reads'"
+                e_ps = "'$.load_profile.executes_ps'"
+                e_rw = "'$.load_profile.executes'"
+                t_ps = "'$.load_profile.transactions_ps'"
+                t_rw = "'$.load_profile.transactions'"
+                db_n = "'$.db_info.db_name'"
+
+                query = f"""
+                    SELECT
+                        COUNT(*) as total_reports,
+                        AVG(CAST(COALESCE(
+                            json_extract_string(raw_payload, {l_ps}),
+                            json_extract_string(raw_payload, {l_rw})
+                        ) AS DOUBLE)) as a_lr,
+                        AVG(CAST(COALESCE(
+                            json_extract_string(raw_payload, {p_ps}),
+                            json_extract_string(raw_payload, {p_rw})
+                        ) AS DOUBLE)) as a_pr,
+                        AVG(CAST(COALESCE(
+                            json_extract_string(raw_payload, {e_ps}),
+                            json_extract_string(raw_payload, {e_rw})
+                        ) AS DOUBLE)) as a_ex,
+                        AVG(CAST(COALESCE(
+                            json_extract_string(raw_payload, {t_ps}),
+                            json_extract_string(raw_payload, {t_rw})
+                        ) AS DOUBLE)) as a_tx
+                    FROM awr_reports
+                    WHERE json_extract_string(raw_payload, {db_n}) = ?
+                """
+
+                result = conn.execute(query, [db_name]).fetchone()
+
+                if result and result[0] > 0:
+                    return {
+                        "total_reports": result[0],
+                        "logical_reads_ps": round(result[1] or 0.0, 2),
+                        "physical_reads_ps": round(result[2] or 0.0, 2),
+                        "executes_ps": round(result[3] or 0.0, 2),
+                        "transactions_ps": round(result[4] or 0.0, 2),
+                    }
+                return {}
+        except Exception as e:
+            logger.error(f"Failed to calculate baselines for {db_name}: {e}")
+            return {}

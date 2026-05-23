@@ -5,9 +5,9 @@ Extractor for the 'Load Profile' table.
 import logging
 
 from bs4 import BeautifulSoup
-from src.parser.utils.html_utils import find_table_by_summary
 
 from src.models.base import LoadProfile
+from src.parser.html_utils import find_table_by_summary
 
 logger = logging.getLogger(__name__)
 

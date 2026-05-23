@@ -96,7 +96,7 @@ if uploaded_file:
             f"**Elapsed Time:** {upload_data['elapsed_mins']} min"
         )
 
-        # --- LEVEL 2: CONTEXT AWARENESS (NEW) ---
+        # --- LEVEL 2: CONTEXT AWARENESS & BASELINES ---
         st.header("🤖 AI Context Awareness")
         if workload:
             wl_type = workload.get("workload_type", "UNKNOWN")
@@ -110,6 +110,48 @@ if uploaded_file:
                 st.metric(label="AI Confidence", value=f"{wl_conf}%")
             with wl_col3:
                 st.info(f"**Reasoning:** {wl_reason}")
+
+            # SPRINT 12: DYNAMIC BASELINES VISUALIZATION
+            baselines = workload.get("baselines", {})
+            if baselines and baselines.get("history_size", 0) > 0:
+                title = (
+                    f"### 📈 Historical Baselines "
+                    f"(Based on {baselines['history_size']} past reports)"
+                )
+                st.markdown(title)
+                metrics_data = baselines.get("metrics", {})
+
+                b_cols = st.columns(4)
+                metric_mappings = [
+                    ("logical_reads_ps", "Logical Reads /s"),
+                    ("physical_reads_ps", "Physical Reads /s"),
+                    ("executes_ps", "Executes /s"),
+                    ("transactions_ps", "Transactions /s"),
+                ]
+
+                for i, (m_key, m_name) in enumerate(metric_mappings):
+                    m_data = metrics_data.get(m_key, {})
+                    if m_data:
+                        current = m_data.get("current", 0)
+                        pct = m_data.get("deviation_pct", 0)
+                        status = m_data.get("status", "NORMAL")
+
+                        # Formatting the delta visualization
+                        delta_val = f"{pct}%" if pct <= 0 else f"+{pct}%"
+                        if status == "HIGH":
+                            delta_val += " ⬆️"
+                        elif status == "LOW":
+                            delta_val += " ⬇️"
+                        else:
+                            delta_val += " ➖"
+
+                        with b_cols[i]:
+                            st.metric(
+                                label=m_name,
+                                value=current,
+                                delta=delta_val,
+                                delta_color="off",
+                            )
         else:
             st.warning("⚠️ Context engine skipped or unavailable.")
 

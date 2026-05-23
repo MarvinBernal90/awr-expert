@@ -38,7 +38,7 @@ class AnalysisResponse(BaseModel):
     """Schema for the diagnostic analysis response."""
 
     awr_hash: str
-    workload_profile: Dict[str, Any]  # <-- NUEVO: Clasificador de Carga (Mes 4)
+    workload_profile: Dict[str, Any]
     diagnostics: List[Any]
 
 
@@ -166,8 +166,21 @@ def analyze_awr(awr_hash: str):
             status_code=404, detail=f"AWR report with hash {awr_hash} not found."
         )
 
-    # 1. Level 2: Context-Awareness (Workload Classifier)
-    workload_context = classify_workload(report)
+    # 1. Level 2: Context-Awareness (Workload Classifier + DYNAMIC BASELINES)
+    db_name = (
+        report.db_info.db_name if report.db_info and report.db_info.db_name else None
+    )
+
+    baselines = {}
+    if db_name:
+        try:
+            # Query DuckDB for historical averages of this specific database
+            baselines = repo.get_historical_baselines(db_name)
+        except Exception as e:
+            logger.warning(f"Could not retrieve baselines for {db_name}: {e}")
+
+    # Pass the history to the engine so it can calculate deviations
+    workload_context = classify_workload(report, baselines)
 
     # 2. Run all heuristic engines
     cpu_diagnosis = analyze_cpu(report)
