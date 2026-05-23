@@ -4,7 +4,7 @@ Handles storage and retrieval of parsed metrics from DuckDB.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import duckdb
 
@@ -62,7 +62,6 @@ class AWRRepository:
             logger.exception("Failed to retrieve report %s", awr_hash)
             raise
 
-    # --- SPRINT 12: DYNAMIC BASELINES ---
     def get_historical_baselines(self, db_name: str) -> Dict[str, Any]:
         """
         Dives into the JSON payloads using DuckDB analytics to calculate
@@ -70,7 +69,6 @@ class AWRRepository:
         """
         try:
             with duckdb.connect(self.db_path) as conn:
-                # Usamos variables para acortar las líneas de la consulta SQL
                 l_ps = "'$.load_profile.logical_reads_ps'"
                 l_rw = "'$.load_profile.logical_reads'"
                 p_ps = "'$.load_profile.physical_reads_ps'"
@@ -118,3 +116,80 @@ class AWRRepository:
         except Exception as e:
             logger.error(f"Failed to calculate baselines for {db_name}: {e}")
             return {}
+
+    def get_time_series(
+        self, db_name: str, limit: int = 30, exclude_awr_hash: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Extracts the historical time-series data chronologically.
+        Filters out the provided hash to prevent the current sample
+        from skewing its own baseline.
+        """
+        try:
+            with duckdb.connect(self.db_path) as conn:
+                l_ps = "'$.load_profile.logical_reads_ps'"
+                l_rw = "'$.load_profile.logical_reads'"
+                p_ps = "'$.load_profile.physical_reads_ps'"
+                p_rw = "'$.load_profile.physical_reads'"
+                e_ps = "'$.load_profile.executes_ps'"
+                e_rw = "'$.load_profile.executes'"
+                t_ps = "'$.load_profile.transactions_ps'"
+                t_rw = "'$.load_profile.transactions'"
+                db_n = "'$.db_info.db_name'"
+
+                query = f"""
+                    SELECT
+                        COALESCE(
+                            json_extract_string(raw_payload, '$.db_info.end_time'),
+                            awr_hash
+                        ) as snapshot_id,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {l_ps}),
+                            json_extract_string(raw_payload, {l_rw})
+                        ) AS DOUBLE) as lr,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {p_ps}),
+                            json_extract_string(raw_payload, {p_rw})
+                        ) AS DOUBLE) as pr,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {e_ps}),
+                            json_extract_string(raw_payload, {e_rw})
+                        ) AS DOUBLE) as ex,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {t_ps}),
+                            json_extract_string(raw_payload, {t_rw})
+                        ) AS DOUBLE) as tx
+                    FROM awr_reports
+                    WHERE json_extract_string(raw_payload, {db_n}) = ?
+                """
+
+                params: List[Any] = [db_name]
+
+                # Exclude the current report from the historical cohort
+                if exclude_awr_hash:
+                    query += " AND awr_hash != ?"
+                    params.append(exclude_awr_hash)
+
+                # Order chronologically (newest first) before limiting
+                query += " ORDER BY rowid DESC LIMIT ?"
+                params.append(limit)
+
+                results = conn.execute(query, params).fetchall()
+
+                # Reverse back to oldest-first for proper charting
+                time_series = []
+                for row in reversed(results):
+                    time_series.append(
+                        {
+                            "snapshot_id": row[0],
+                            "logical_reads_ps": row[1] or 0.0,
+                            "physical_reads_ps": row[2] or 0.0,
+                            "executes_ps": row[3] or 0.0,
+                            "transactions_ps": row[4] or 0.0,
+                        }
+                    )
+
+                return time_series
+        except Exception as e:
+            logger.error(f"Failed to extract time-series for {db_name}: {e}")
+            return []
