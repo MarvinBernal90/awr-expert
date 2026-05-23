@@ -4,7 +4,7 @@ Handles storage and retrieval of parsed metrics from DuckDB.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import duckdb
 
@@ -70,7 +70,6 @@ class AWRRepository:
         """
         try:
             with duckdb.connect(self.db_path) as conn:
-                # Usamos variables para acortar las líneas de la consulta SQL
                 l_ps = "'$.load_profile.logical_reads_ps'"
                 l_rw = "'$.load_profile.logical_reads'"
                 p_ps = "'$.load_profile.physical_reads_ps'"
@@ -118,3 +117,64 @@ class AWRRepository:
         except Exception as e:
             logger.error(f"Failed to calculate baselines for {db_name}: {e}")
             return {}
+
+    # --- SPRINT 13: TIME-SERIES INTELLIGENCE ---
+    def get_time_series(self, db_name: str, limit: int = 30) -> List[Dict[str, Any]]:
+        """
+        Extracts the historical time-series data for a specific database.
+        Returns a list of metrics per snapshot to feed the Analytics Engine.
+        """
+        try:
+            with duckdb.connect(self.db_path) as conn:
+                l_ps = "'$.load_profile.logical_reads_ps'"
+                l_rw = "'$.load_profile.logical_reads'"
+                p_ps = "'$.load_profile.physical_reads_ps'"
+                p_rw = "'$.load_profile.physical_reads'"
+                e_ps = "'$.load_profile.executes_ps'"
+                e_rw = "'$.load_profile.executes'"
+                t_ps = "'$.load_profile.transactions_ps'"
+                t_rw = "'$.load_profile.transactions'"
+                db_n = "'$.db_info.db_name'"
+
+                query = f"""
+                    SELECT
+                        awr_hash,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {l_ps}),
+                            json_extract_string(raw_payload, {l_rw})
+                        ) AS DOUBLE) as lr,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {p_ps}),
+                            json_extract_string(raw_payload, {p_rw})
+                        ) AS DOUBLE) as pr,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {e_ps}),
+                            json_extract_string(raw_payload, {e_rw})
+                        ) AS DOUBLE) as ex,
+                        CAST(COALESCE(
+                            json_extract_string(raw_payload, {t_ps}),
+                            json_extract_string(raw_payload, {t_rw})
+                        ) AS DOUBLE) as tx
+                    FROM awr_reports
+                    WHERE json_extract_string(raw_payload, {db_n}) = ?
+                    LIMIT ?
+                """
+
+                results = conn.execute(query, [db_name, limit]).fetchall()
+
+                time_series = []
+                for row in results:
+                    time_series.append(
+                        {
+                            "snapshot_id": row[0],
+                            "logical_reads_ps": row[1] or 0.0,
+                            "physical_reads_ps": row[2] or 0.0,
+                            "executes_ps": row[3] or 0.0,
+                            "transactions_ps": row[4] or 0.0,
+                        }
+                    )
+
+                return time_series
+        except Exception as e:
+            logger.error(f"Failed to extract time-series for {db_name}: {e}")
+            return []
